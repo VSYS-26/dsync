@@ -1,2 +1,29 @@
 # dsync
-Decentralized file and folder sync between trusted devices - no central server
+
+Decentralized file and folder sync between trusted devices – no central server.
+
+A proof-of-concept developed as part of a university project in the course **Distributed Systems**.
+
+---
+
+## Idea
+
+Most file sync solutions rely on a central server or cloud service. This project explores a different approach: devices sync directly with each other, without any intermediary.
+
+Trust between devices is established explicitly and manually. There is no automatic pairing, no account system, and no central coordinator.
+
+---
+
+## Goals
+
+- Sync files and folders directly between trusted devices
+- Support two modes: keeping devices in sync (mirror) and backing up to another device
+- Keep the design simple and easy to reason about
+
+---
+
+## Status
+
+Work in progress – early proof-of-concept stage.
+
+---
