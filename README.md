@@ -27,3 +27,30 @@ Trust between devices is established explicitly and manually. There is no automa
 Work in progress – early proof-of-concept stage.
 
 ---
+
+## Development Setup
+
+This project uses [uv](https://docs.astral.sh/uv/) for fast Python dependency management and virtual environments.
+
+### Prerequisites
+
+- [Install uv](https://docs.astral.sh/uv/getting-started/installation/)
+
+### Installation
+
+1. Clone the repository and navigate into the project directory.
+2. Sync the project (this automatically creates a virtual environment in `.venv/` and installs all required dependencies):
+   ```bash
+   uv sync
+   ```
+
+### UV commands
+- run a python script
+```bash
+uv run dsync/main.py
+```
+
+- add a library
+```bash
+uv add library_name
+```
