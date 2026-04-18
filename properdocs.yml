@@ -1,4 +1,16 @@
 site_name: DSync
+nav:
+  - Startseite: index.md
+  - ADRs:
+      - ADR-001: adrs/ADR-001-YAML.md
+      - Vorlage: adrs/ADR-###-Template.md
+  - Konventionen:
+      - Verzweigungsmodell: conventions/branching-model.md
+  - Besprechungen:
+      - Protokoll – 18.04.2026: meetings/Meetings Nodes.md
+  - Recherche:
+      - Geräteidentifikation: research/VSYS26T2-27.md
+
 theme:
   name: material
   palette:
@@ -6,11 +18,14 @@ theme:
       primary: purple
       accent: deep-purple
       toggle:
-        icon: material/weather-night
-        name: Dark mode
+        icon: material/weather-sunny
+        name: Light mode
     - scheme: default
       primary: blue
       accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Dark mode
 
   features:
     - navigation.tabs
