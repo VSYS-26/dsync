@@ -1,0 +1,32 @@
+name: Deploy MkDocs
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ hashFiles('.github/workflows/deploy-mkdocs.yml') }}
+          restore-keys: |
+            pip-${{ runner.os }}-
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: 3.x
+
+      - run: pip install properdocs mkdocs-material mkdocs-literate-nav "mkdocstrings[python]" pymdown-extensions
+
+      - run: properdocs gh-deploy --force
+        env:
+          DISABLE_MKDOCS_2_WARNING: "true"

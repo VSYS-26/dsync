@@ -1,0 +1,61 @@
+site_name: DSync
+nav:
+  - Startseite: index.md
+  - ADRs:
+      - adrs/index.md
+      - Vorlage: adrs/ADR-###-Template.md
+      - ADRS:
+        - ADR-001: adrs/ADR-001-YAML.md
+  - Konventionen:
+      - conventions/index.md
+      - Verzweigungsmodell: conventions/branching-model.md
+  - Besprechungen:
+      - meetings/index.md
+      - Protokoll – 18.04.2026: meetings/Meetings Nodes.md
+  - Recherche:
+      - research/index.md
+      - Geräteidentifikation: research/VSYS26T2-27.md
+
+theme:
+  name: material
+  palette:
+    - scheme: slate
+      primary: purple
+      accent: deep-purple
+      toggle:
+        icon: material/weather-sunny
+        name: Light mode
+    - scheme: default
+      primary: blue
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Dark mode
+
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - content.code.copy
+    - content.action.edit
+
+plugins:
+  - search
+  - literate-nav
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_source: true
+
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - pymdownx.superfences
+  - pymdownx.snippets
+
+extra_javascript:
+  - https://unpkg.com/mermaid/dist/mermaid.min.js
+  - https://unpkg.com/katex@0/dist/katex.min.js
+  - https://unpkg.com/katex@0/dist/auto-render.min.js
