@@ -3,9 +3,9 @@ nav:
   - Startseite: index.md
   - ADRs:
       - adrs/index.md
+      - Vorlage: adrs/ADR-###-Template.md
       - ADRS:
         - ADR-001: adrs/ADR-001-YAML.md
-        - Vorlage: adrs/ADR-###-Template.md
   - Konventionen:
       - conventions/index.md
       - Verzweigungsmodell: conventions/branching-model.md
