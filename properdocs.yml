@@ -6,8 +6,8 @@ theme:
       primary: blue
       accent: indigo
     - scheme: slate
-      primary: blue
-      accent: indigo
+      primary: purple
+      accent: deep-purple
       toggle:
         icon: material/weather-night
         name: Dark mode
@@ -20,7 +20,6 @@ theme:
 
 plugins:
   - search
-  - gen-files
   - literate-nav
   - mkdocstrings:
       handlers:
@@ -34,6 +33,7 @@ markdown_extensions:
   - toc:
       permalink: true
   - pymdownx.superfences
+  - pymdownx.snippets
 
 extra_javascript:
   - https://unpkg.com/mermaid/dist/mermaid.min.js
