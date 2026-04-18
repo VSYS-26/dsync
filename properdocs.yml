@@ -2,15 +2,15 @@ site_name: DSync
 theme:
   name: material
   palette:
-    - scheme: default
-      primary: blue
-      accent: indigo
     - scheme: slate
       primary: purple
       accent: deep-purple
       toggle:
         icon: material/weather-night
         name: Dark mode
+    - scheme: default
+      primary: blue
+      accent: indigo
 
   features:
     - navigation.tabs
