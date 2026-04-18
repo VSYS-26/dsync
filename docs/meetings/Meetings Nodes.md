@@ -1,4 +1,4 @@
-# Protokoll – 18.04.2026
+# Besprechungsprotokoll – 18.04.2026
 
 ## Ticket-Management
 
@@ -37,6 +37,6 @@ Branches folgen dem Schema `<typ>/ticket-suffix`, z. B. `feat/VSYS26T2-38`. Folg
 
 Als Referenz dienen die **Conventional Commits**: https://www.conventionalcommits.org/en/v1.0.0/
 
-## Meetings
+## Besprechungen
 
 Regelmäßige Treffen finden **dienstags um 11:30 Uhr** statt – jeweils vor der Übungsstunde. Der erste Termin wird abgewartet, um zu sehen, was in der Übung erarbeitet wird, bevor weitere Schritte festgelegt werden.

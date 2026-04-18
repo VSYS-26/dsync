@@ -1,4 +1,4 @@
-# ADR-001: YAML für Konfiguration
+# ADR-001: YAML für die Konfiguration
 
 - **Datum:** 2026-04-18
 - **Status:** `Akzeptiert`

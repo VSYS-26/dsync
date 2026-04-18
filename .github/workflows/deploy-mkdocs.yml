@@ -14,11 +14,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ hashFiles('.github/workflows/deploy-mkdocs.yml') }}
+          restore-keys: |
+            pip-${{ runner.os }}-
+
       - uses: actions/setup-python@v5
         with:
           python-version: 3.x
-          cache: pip
-          cache-dependency-path: .github/workflows/deploy-mkdocs.yml
 
       - run: pip install properdocs mkdocs-material mkdocs-literate-nav "mkdocstrings[python]" pymdown-extensions
 
