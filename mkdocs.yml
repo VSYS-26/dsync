@@ -1,0 +1,41 @@
+site_name: DSync
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: blue
+      accent: indigo
+    - scheme: slate
+      primary: blue
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Dark mode
+
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - content.code.copy
+    - content.action.edit
+
+plugins:
+  - search
+  - gen-files
+  - literate-nav
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_source: true
+
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - pymdownx.superfences
+
+extra_javascript:
+  - https://unpkg.com/mermaid/dist/mermaid.min.js
+  - https://unpkg.com/katex@0/dist/katex.min.js
+  - https://unpkg.com/katex@0/dist/auto-render.min.js
