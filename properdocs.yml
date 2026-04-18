@@ -2,13 +2,18 @@ site_name: DSync
 nav:
   - Startseite: index.md
   - ADRs:
-      - ADR-001: adrs/ADR-001-YAML.md
-      - Vorlage: adrs/ADR-###-Template.md
+      - adrs/index.md
+      - ADRS:
+        - ADR-001: adrs/ADR-001-YAML.md
+        - Vorlage: adrs/ADR-###-Template.md
   - Konventionen:
+      - conventions/index.md
       - Verzweigungsmodell: conventions/branching-model.md
   - Besprechungen:
+      - meetings/index.md
       - Protokoll – 18.04.2026: meetings/Meetings Nodes.md
   - Recherche:
+      - research/index.md
       - Geräteidentifikation: research/VSYS26T2-27.md
 
 theme:
