@@ -54,3 +54,9 @@ uv run dsync/main.py
 ```bash
 uv add library_name
 ```
+
+- install & run linter and security checks
+```bash
+uv run pre-commit install
+uv run pre-commit run --all-files
+```
