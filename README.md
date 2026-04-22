@@ -1,6 +1,6 @@
 # dsync
 
-Decentralized file and folder sync between trusted devices – no central server.
+Decentralized file and folder sync between trusted devices - no central server.
 
 A proof-of-concept developed as part of a university project in the course **Distributed Systems**.
 
@@ -24,7 +24,7 @@ Trust between devices is established explicitly and manually. There is no automa
 
 ## Status
 
-Work in progress – early proof-of-concept stage.
+Work in progress - early proof-of-concept stage.
 
 ---
 
@@ -45,18 +45,42 @@ This project uses [uv](https://docs.astral.sh/uv/) for fast Python dependency ma
    ```
 
 ### UV commands
+
 - run a python script
-```bash
-uv run dsync/main.py
-```
+  ```bash
+  uv run dsync/main.py
+  ```
 
 - add a library
-```bash
-uv add library_name
-```
+  ```bash
+  uv add library_name
+  ```
 
-- install & run linter and security checks
-```bash
-uv run pre-commit install
-uv run pre-commit run --all-files
-```
+- install and run checks
+  ```bash
+  uv run pre-commit install
+  uv run pre-commit install --hook-type commit-msg
+  uv run pre-commit run --all-files
+  ```
+
+---
+
+## Standards and Tooling
+
+### Python standards
+
+- PEP 8: baseline style, naming, indentation, and structure
+- PEP 257: docstring conventions (Google style via Ruff)
+- PEP 484: static typing and type-hint checks (mypy strict mode)
+
+### Git standards
+
+- Conventional Commits for commit messages:
+  https://www.conventionalcommits.org/
+- Commit messages are validated automatically through a `commit-msg` pre-commit hook.
+
+### Enforced checks (pre-commit on each commit)
+
+- Ruff: linting, formatting, import sorting, auto-fixes, docstring checks
+- mypy: static type checking
+- Bandit: security scanning (secrets, weak crypto, insecure patterns)
