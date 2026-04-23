@@ -94,8 +94,8 @@ def public_key_fingerprint(public_key_pem: bytes, fmt: FingerprintFormat = "hex"
     digest = hashlib.sha256(public_raw).digest()
 
     if fmt == "hex":
-        return digest.hex()
+        return "hex-" + digest.hex()
     if fmt == "base64url":
-        return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
+        return "b64u-" + base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
     raise ValueError(f"Unsupported fingerprint format: {fmt}")
 
