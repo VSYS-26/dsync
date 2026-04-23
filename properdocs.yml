@@ -41,6 +41,7 @@ theme:
     - content.action.edit
 
 plugins:
+  - mike
   - search
   - literate-nav
   - mkdocstrings:
