@@ -1,6 +1,6 @@
 """Folder sync configuration models and CRUD helpers."""
 
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import ClassVar
 
@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from dsync.config._base import YamlFileConfig
 
 
-class SyncMode(str, Enum):
+class SyncMode(StrEnum):
     """Sync direction for a folder entry."""
 
     MIRROR = "mirror"

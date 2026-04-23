@@ -1,0 +1,30 @@
+# Keep repository text files LF-normalized, regardless of contributor OS.
+* text=auto eol=lf
+
+# Common source, config, docs and data text formats used in this project.
+*.py   text eol=lf
+*.md   text eol=lf
+*.toml text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.txt  text eol=lf
+*.ini  text eol=lf
+*.cfg  text eol=lf
+*.sh   text eol=lf
+
+# Do not apply text normalization to binary assets.
+*.png  -text
+*.jpg  -text
+*.jpeg -text
+*.gif  -text
+*.webp -text
+*.ico  -text
+*.pdf  -text
+*.zip  -text
+*.gz   -text
+*.7z   -text
+*.woff -text
+*.woff2 -text
+*.ttf  -text
+*.otf  -text

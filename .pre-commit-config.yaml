@@ -1,19 +1,30 @@
+default_stages: [pre-commit]
+
 repos:
 - repo: https://github.com/astral-sh/ruff-pre-commit
   rev: v0.15.11
   hooks:
     - id: ruff-check
-      args: [ --fix ]
+      args: [--fix, --exit-non-zero-on-fix]
     - id: ruff-format
 
--   repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.20.1
-    hooks:
-    -   id: mypy
-        args: [--strict]
-        additional_dependencies: [typer>=0.24.1, rich>=15.0.0, pyyaml>=6.0.2, types-pyyaml>=6.0.12, pydantic>=2.10]
+- repo: https://github.com/pre-commit/mirrors-mypy
+  rev: v1.20.1
+  hooks:
+    - id: mypy
+      args: [--config-file=pyproject.toml]
+      additional_dependencies: [typer>=0.24.1, rich>=15.0.0, cryptography>=45.0.0, pyyaml>=6.0.2, types-pyyaml>=6.0.12, pydantic>=2.10]
 
--   repo: https://github.com/PyCQA/bandit
-    rev: 1.9.4
-    hooks:
+- repo: https://github.com/PyCQA/bandit
+  rev: 1.9.4
+  hooks:
     - id: bandit
+      args: [-c, pyproject.toml, -r, dsync]
+
+- repo: local
+  hooks:
+    - id: conventional-commits
+      name: conventional-commits
+      entry: python scripts/validate_commit_msg.py
+      language: python
+      stages: [commit-msg]

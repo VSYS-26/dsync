@@ -102,3 +102,5 @@ Refs: VSYS26T2-38
 ```
 
 Weitere Details: [conventionalcommits.org](https://www.conventionalcommits.org/en/v1.0.0/)
+
+Die Commit-Message-Konvention wird lokal automatisch per `pre-commit` `commit-msg` Hook validiert.
