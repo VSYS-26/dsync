@@ -3,8 +3,8 @@
 from pathlib import Path
 from typing import ClassVar, Self
 
-import yaml
 from pydantic import BaseModel
+import yaml
 
 
 class YamlFileConfig(BaseModel):
@@ -27,7 +27,5 @@ class YamlFileConfig(BaseModel):
             raise FileExistsError(file)
         directory.mkdir(parents=True, exist_ok=True)
         file.write_text(
-            yaml.safe_dump(
-                self.model_dump(mode="json"), sort_keys=False, allow_unicode=True
-            )
+            yaml.safe_dump(self.model_dump(mode="json"), sort_keys=False, allow_unicode=True)
         )
