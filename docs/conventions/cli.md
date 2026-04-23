@@ -86,6 +86,25 @@ Verfügbare Styles (definiert in `dsync/cli/console.py`): `info`, `success`, `wa
 
 ---
 
+## App-State
+
+Beim Start lädt `dsync/cli/commands/config_dir.py` die YAML-Configs aus dem per `--config-dir` / `-c` übergebenen Ordner (Default: `./dsync-config/`) und legt sie als `AppState` (`dsync/state.py`) auf `ctx.obj` ab.
+
+Zugriff aus einem Command:
+```python
+import typer
+from dsync.state import AppState
+
+def my_command(ctx: typer.Context) -> None:
+    """Example command using app state."""
+    state: AppState = ctx.obj
+    # state.folders / state.devices / state.config_dir
+```
+
+Fehlende Config-Dateien oder ein nicht existierendes Verzeichnis sind kein Fehler – die Configs sind dann schlicht leer. Ein neues Verzeichnis wird erst beim Save angelegt.
+
+---
+
 ## Tests
 
 #TODO Test-Strategie für CLI-Commands definieren nachdem generelle Teststrategie festgelegt wurde
