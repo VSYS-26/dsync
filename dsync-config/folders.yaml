@@ -1,0 +1,15 @@
+# Folder sync configuration.
+# The entries below are EXAMPLES only - uncomment and edit them to configure
+# real folders or single files for synchronization. Each entry needs a unique
+# id, an existing path and a sync mode (mirror | backup-to-peer).
+
+# entries:
+#   # Example: sync a whole folder bidirectionally.
+#   - id: dokumente
+#     path: /home/user/Dokumente
+#     mode: mirror
+#
+#   # Example: one-way backup of a single file.
+#   - id: notizen
+#     path: /home/user/notizen.txt
+#     mode: backup-to-peer
