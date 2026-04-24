@@ -2,7 +2,8 @@ name: Deploy MkDocs
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -13,6 +14,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/cache@v4
         with:
@@ -25,8 +28,15 @@ jobs:
         with:
           python-version: 3.x
 
-      - run: pip install properdocs mkdocs-material mkdocs-literate-nav "mkdocstrings[python]" pymdown-extensions
+      - run: pip install properdocs mike mkdocs-material mkdocs-literate-nav "mkdocstrings[python]" pymdown-extensions
 
-      - run: properdocs gh-deploy --force
+      - name: Deploy versioned docs with mike
         env:
-          DISABLE_MKDOCS_2_WARNING: "true"
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            mike deploy --push -F properdocs.yml --update-aliases main latest
+            mike set-default --push -F properdocs.yml latest
+          elif [ "${{ github.ref_name }}" = "dev" ]; then
+            mike deploy --push -F properdocs.yml --update-aliases dev
+          fi
