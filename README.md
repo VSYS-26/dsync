@@ -60,3 +60,45 @@ uv add library_name
 uv run pre-commit install
 uv run pre-commit run --all-files
 ```
+
+## Testing locally (Relay Setup)
+
+To test the peer-to-peer connection on your local machine, you need to simulate two devices and one relay server. This requires three separate terminal windows.
+
+#### **1. Generate Certificates & Setup Trust**
+
+Before two peers can communicate, they need their cryptographic identities.
+
+   1. Generate the self-signed certificates and private keys for your nodes. The script will output a SHA-256 fingerprint.
+   2. Create a configuration file at dsyn_config/devices.yaml.
+   3. Add the fingerprints of the trusted devices to this file to authorize them (Mutual TLS authentication):
+   ```yaml
+   trusted_devices:
+      "YOUR_GENERATED_FINGERPRINT_HASH_HERE": "Peer B (Laptop)"
+   ```
+#### **2. Run the 3 Terminals**
+
+Open three separate terminals in the root directory of the project.
+
+**Terminal 1: Start the Relay Server**
+
+The relay server acts as a bridge to overcome NAT/Firewall restrictions.
+```bash
+uv run python relay_server.py
+```
+
+**Terminal 2: Start Node A (Server mode)**
+
+This node connects to the relay and waits for a trusted partner.
+```bash
+uv run python -m dsync.main sync start --mode server --relay-host 127.0.0.1
+```
+
+**Terminal 3: Start Node B (Client mode)**
+
+This node connects to the relay and initiates the handshake and sync process.
+```bash
+uv run python -m dsync.main sync start --mode client --relay-host 127.0.0.1
+```
+
+If everything is configured correctly, you will see the Mutual TLS verification succeed and the nodes exchanging their file hashes.
