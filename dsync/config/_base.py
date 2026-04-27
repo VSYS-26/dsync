@@ -18,7 +18,7 @@ class YamlFileConfig(BaseModel):
         file = directory / cls.FILENAME
         if not file.is_file():
             return cls()
-        return cls.model_validate(yaml.safe_load(file.read_text()) or {})
+        return cls.model_validate(yaml.safe_load(file.read_text(encoding="utf-8")) or {})
 
     def save(self, directory: Path, *, overwrite: bool = False) -> None:
         """Write the config to ``directory / FILENAME`` (raise FileExistsError if present)."""
@@ -27,5 +27,6 @@ class YamlFileConfig(BaseModel):
             raise FileExistsError(file)
         directory.mkdir(parents=True, exist_ok=True)
         file.write_text(
-            yaml.safe_dump(self.model_dump(mode="json"), sort_keys=False, allow_unicode=True)
+            yaml.safe_dump(self.model_dump(mode="json"), sort_keys=False, allow_unicode=True),
+            encoding="utf-8",
         )
