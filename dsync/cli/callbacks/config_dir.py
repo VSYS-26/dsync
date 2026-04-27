@@ -24,8 +24,10 @@ def config_dir(
     ] = DEFAULT_CONFIG_DIR,
 ) -> None:
     """Load folder and device configs into the Typer AppState context."""
-    if not directory.is_dir():
+    if not directory.exists():
         warn(f"config directory {directory} does not exist, starting empty")
+    elif not directory.is_dir():
+        raise typer.BadParameter(f"{directory} exists but is not a directory")
     else:
         for filename in (FoldersConfig.FILENAME, DevicesConfig.FILENAME):
             if not (directory / filename).is_file():
