@@ -1,0 +1,14 @@
+# Trusted-devices configuration.
+# The entries below are EXAMPLES only - uncomment and edit them to register
+# real trusted peer devices. Each entry needs a unique id and the
+# fingerprint of the peer's public key. Both fields must be unique across
+# all entries.
+
+# trusted_devices:
+#   # Example: another user's laptop.
+#   - id: laptop-anna
+#     fingerprint: <fingerprint-of-annas-laptop>
+#
+#   # Example: a home-lab backup server.
+#   - id: server-keller
+#     fingerprint: <fingerprint-of-keller-server>
