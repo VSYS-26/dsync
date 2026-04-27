@@ -1,7 +1,6 @@
 # CLI-Commands
 
-CLI basiert auf **[Typer](https://github.com/fastapi/typer)** + *
-*[Rich](https://github.com/textualize/rich)**
+CLI basiert auf **[Typer](https://github.com/fastapi/typer)** + **[Rich](https://github.com/textualize/rich)**
 
 Jedes Command oder jede Gruppe liegt in einer eigenen Datei unter `dsync/cli/commands/`. App-weite
 Typer-Callbacks liegen analog unter `dsync/cli/callbacks/`
