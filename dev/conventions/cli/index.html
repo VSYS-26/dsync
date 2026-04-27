@@ -797,6 +797,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#callbacks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Callbacks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#argumente-und-options" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -823,6 +834,17 @@
     <span class="md-ellipsis">
       
         Rich-Output
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#app-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        App-State
       
     </span>
   </a>
@@ -1191,6 +1213,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#callbacks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Callbacks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#argumente-und-options" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1217,6 +1250,17 @@
     <span class="md-ellipsis">
       
         Rich-Output
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#app-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        App-State
       
     </span>
   </a>
@@ -1253,11 +1297,13 @@
 
 <h1 id="cli-commands">CLI-Commands<a class="headerlink" href="#cli-commands" title="Permanent link">&para;</a></h1>
 <p>CLI basiert auf <strong><a href="https://github.com/fastapi/typer">Typer</a></strong> + <strong><a href="https://github.com/textualize/rich">Rich</a></strong></p>
-<p>Jedes Command oder jede Gruppe liegt in einer eigenen Datei unter <code>dsync/cli/commands/</code></p>
-<p>Registriert werden alle Commands zentral in <code>dsync/cli/__init__.py</code></p>
+<p>Jedes Command oder jede Gruppe liegt in einer eigenen Datei unter <code>dsync/cli/commands/</code>. App-weite
+Typer-Callbacks liegen analog unter <code>dsync/cli/callbacks/</code></p>
+<p>Registriert werden Commands und Callbacks zentral in <code>dsync/cli/__init__.py</code></p>
 <hr />
 <h2 id="dateinamen">Dateinamen<a class="headerlink" href="#dateinamen" title="Permanent link">&para;</a></h2>
-<p>Echte Commands: <code>&lt;command_name&gt;.py</code> bzw. <code>&lt;command_name&gt;/</code> (Dateiname = CLI-Command, z.B. <code>init.py</code> → <code>dsync init</code>)</p>
+<p>Echte Commands: <code>&lt;command_name&gt;.py</code> bzw. <code>&lt;command_name&gt;/</code> (Dateiname = CLI-Command, z.B.
+<code>init.py</code> → <code>dsync init</code>)</p>
 <p>Platzhalter-Beispiele: <code>_&lt;command_name&gt;</code> mit Unterstrich-Prefix</p>
 <hr />
 <h2 id="muster">Muster<a class="headerlink" href="#muster" title="Permanent link">&para;</a></h2>
@@ -1265,42 +1311,72 @@
 <p>Plain Function exportieren, in <code>dsync/cli/__init__.py</code> via <code>cli.command()(&lt;fn&gt;)</code> registrieren</p>
 <p>Vorlage: <code>dsync/cli/commands/_hello.py</code></p>
 <h3 id="command-gruppe">Command-Gruppe<a class="headerlink" href="#command-gruppe" title="Permanent link">&para;</a></h3>
-<p>Pro Gruppe ein eigener Ordner <code>dsync/cli/commands/&lt;group&gt;/</code>. Ein File pro Sub-Befehl nach <a href="https://typer.tiangolo.com/tutorial/one-file-per-command/">Typer one-file-per-command</a></p>
-<p>Jedes Sub-Befehl-File exportiert <code>app: typer.Typer = typer.Typer()</code> mit genau einem <code>@app.command()</code>-Decorator</p>
-<p>Die <code>__init__.py</code> der Gruppe definiert die Gruppen-<code>app</code> und Sub-Befehle via <code>app.add_typer(&lt;sub&gt;.app)</code>. <code>no_args_is_help=True</code> auf der Gruppe setzen (zeigt Hilfe, wenn die Gruppe ohne Sub-Befehl aufgerufen wird)</p>
+<p>Pro Gruppe ein eigener Ordner <code>dsync/cli/commands/&lt;group&gt;/</code>. Ein File pro Sub-Befehl
+nach <a href="https://typer.tiangolo.com/tutorial/one-file-per-command/">Typer one-file-per-command</a></p>
+<p>Jedes Sub-Befehl-File exportiert <code>app: typer.Typer = typer.Typer()</code> mit genau einem <code>@app.command()</code>
+-Decorator</p>
+<p>Die <code>__init__.py</code> der Gruppe definiert die Gruppen-<code>app</code> und Sub-Befehle via
+<code>app.add_typer(&lt;sub&gt;.app)</code>. <code>no_args_is_help=True</code> auf der Gruppe setzen (zeigt Hilfe, wenn die
+Gruppe ohne Sub-Befehl aufgerufen wird)</p>
 <p>In <code>dsync/cli/__init__.py</code> via <code>cli.add_typer(&lt;group&gt;.app, name="...")</code> registrieren</p>
 <p>Vorlage: <code>dsync/cli/commands/_demo/</code></p>
 <hr />
+<h2 id="callbacks">Callbacks<a class="headerlink" href="#callbacks" title="Permanent link">&para;</a></h2>
+<p>Ein Typer-Callback ist eine Funktion, die <strong>vor jedem Subcommand</strong> läuft und App-weit gültige
+Options definiert (z.B. <code>--config-dir</code>). Typischer Use Case: einmaliges Initialisieren von
+Runtime-State auf <code>ctx.obj</code>, der allen Commands zur Verfügung steht</p>
+<p>Pro Callback eine eigene Datei unter <code>dsync/cli/callbacks/&lt;callback_name&gt;.py</code></p>
+<p>Registrierung in <code>dsync/cli/__init__.py</code> via <code>cli.callback()(&lt;fn&gt;)</code></p>
+<p>Vorlage: <code>dsync/cli/callbacks/config_dir.py</code> (lädt YAML-Configs in den <code>AppState</code>)</p>
+<hr />
 <h2 id="argumente-und-options">Argumente und Options<a class="headerlink" href="#argumente-und-options" title="Permanent link">&para;</a></h2>
-<p>Annotated-Stil bei Optionen
+<p>Annotated-Stil bei Optionen</p>
 <div class="highlight"><pre><span></span><code><span class="n">name</span><span class="p">:</span> <span class="n">Annotated</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">typer</span><span class="o">.</span><span class="n">Argument</span><span class="p">(</span><span class="n">help</span><span class="o">=</span><span class="s2">&quot;Name to greet&quot;</span><span class="p">)]</span> <span class="o">=</span> <span class="s2">&quot;world&quot;</span>
 <span class="n">flag</span><span class="p">:</span> <span class="n">Annotated</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="n">typer</span><span class="o">.</span><span class="n">Option</span><span class="p">(</span><span class="s2">&quot;--flag&quot;</span><span class="p">,</span> <span class="s2">&quot;-f&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Enable flag&quot;</span><span class="p">)]</span> <span class="o">=</span> <span class="kc">False</span>
 </code></pre></div>
-Default-Wert rechts vom <code>=</code>, nicht als erstes Argument in <code>typer.Argument(...)</code></p>
+<p>Default-Wert rechts vom <code>=</code>, nicht als erstes Argument in <code>typer.Argument(...)</code></p>
 <p>Bei Pflicht-Argument: kein Default setzen</p>
 <p>Alle Parameter + Return-Type (<code>-&gt; None</code>) annotiert (für automatische Type-Checks)</p>
 <hr />
 <h2 id="docstrings-und-help-texte">Docstrings und Help-Texte<a class="headerlink" href="#docstrings-und-help-texte" title="Permanent link">&para;</a></h2>
-<p>Jede Command-Funktion bekommt einen Docstring. Typer nutzt sie automatisch als Command-Help
+<p>Jede Command-Funktion bekommt einen Docstring. Typer nutzt sie automatisch als Command-Help</p>
 <div class="highlight"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">hello</span><span class="p">(</span>
     <span class="n">name</span><span class="p">:</span> <span class="n">Annotated</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">typer</span><span class="o">.</span><span class="n">Argument</span><span class="p">(</span><span class="n">help</span><span class="o">=</span><span class="s2">&quot;Name to greet&quot;</span><span class="p">)]</span> <span class="o">=</span> <span class="s2">&quot;world&quot;</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Greet someone by name.&quot;&quot;&quot;</span>
     <span class="n">success</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Hello, </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">!&quot;</span><span class="p">)</span>
 </code></pre></div>
-Erste Zeile prägnanter Satz (<code>Greet someone by name.</code>)</p>
+<p>Erste Zeile prägnanter Satz (<code>Greet someone by name.</code>)</p>
 <p>Bei längerer Hilfe: Leerzeile, danach Details</p>
 <p>Argument-spezifische Hilfe bleibt im <code>typer.Argument(help="...")</code> / <code>typer.Option(help="...")</code></p>
 <hr />
 <h2 id="rich-output">Rich-Output<a class="headerlink" href="#rich-output" title="Permanent link">&para;</a></h2>
 <p>Ausschließlich die geteilte Console aus <code>dsync.cli.console</code> nutzen</p>
-<p>keine eigenen <code>Console()</code>-Instanzen
+<p>keine eigenen <code>Console()</code>-Instanzen</p>
 <div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">dsync.cli.console</span><span class="w"> </span><span class="kn">import</span> <span class="n">console</span><span class="p">,</span> <span class="n">success</span><span class="p">,</span> <span class="n">warn</span><span class="p">,</span> <span class="n">error</span><span class="p">,</span> <span class="n">info</span>
 
-<span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[info]would add:[/info] </span><span class="si">{</span><span class="n">item_id</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>   <span class="c1"># Inline-Markup</span>
-<span class="n">success</span><span class="p">(</span><span class="s2">&quot;Sync completed.&quot;</span><span class="p">)</span>                            <span class="c1"># Helper für einfache Nachrichten</span>
+<span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[info]would add:[/info] </span><span class="si">{</span><span class="n">item_id</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>  <span class="c1"># Inline-Markup</span>
+<span class="n">success</span><span class="p">(</span><span class="s2">&quot;Sync completed.&quot;</span><span class="p">)</span>  <span class="c1"># Helper für einfache Nachrichten</span>
 </code></pre></div>
-Verfügbare Styles (definiert in <code>dsync/cli/console.py</code>): <code>info</code>, <code>success</code>, <code>warn</code>, <code>error</code>. Neue Styles zentral im Theme ergänzen, nicht ad-hoc in einzelnen Commands</p>
+<p>Verfügbare Styles (definiert in <code>dsync/cli/console.py</code>): <code>info</code>, <code>success</code>, <code>warn</code>, <code>error</code>. Neue
+Styles zentral im Theme ergänzen, nicht ad-hoc in einzelnen Commands</p>
+<hr />
+<h2 id="app-state">App-State<a class="headerlink" href="#app-state" title="Permanent link">&para;</a></h2>
+<p>Beim Start lädt <code>dsync/cli/callbacks/config_dir.py</code> die YAML-Configs aus dem per <code>--config-dir</code> /
+<code>-c</code> übergebenen Ordner (Default: <code>./dsync-config/</code>) und legt sie als <code>AppState</code> (<code>dsync/state.py</code>)
+auf <code>ctx.obj</code> ab.</p>
+<p>Zugriff aus einem Command:</p>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">typer</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dsync.state</span><span class="w"> </span><span class="kn">import</span> <span class="n">AppState</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">my_command</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">typer</span><span class="o">.</span><span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Example command using app state.&quot;&quot;&quot;</span>
+    <span class="n">state</span><span class="p">:</span> <span class="n">AppState</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">obj</span>
+    <span class="c1"># state.folders / state.devices / state.config_dir</span>
+</code></pre></div>
+<p>Fehlende Config-Dateien oder ein nicht existierendes Verzeichnis sind kein Fehler – die Configs sind
+dann schlicht leer. Ein neues Verzeichnis wird erst beim Save angelegt.</p>
 <hr />
 <h2 id="tests">Tests<a class="headerlink" href="#tests" title="Permanent link">&para;</a></h2>
 <h1 id="todo-test-strategie-fur-cli-commands-definieren-nachdem-generelle-teststrategie-festgelegt-wurde">TODO Test-Strategie für CLI-Commands definieren nachdem generelle Teststrategie festgelegt wurde<a class="headerlink" href="#todo-test-strategie-fur-cli-commands-definieren-nachdem-generelle-teststrategie-festgelegt-wurde" title="Permanent link">&para;</a></h1>
