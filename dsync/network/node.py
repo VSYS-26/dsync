@@ -59,7 +59,7 @@ class P2PNode:
             # TLS Wrap
             tls_socket = context.wrap_socket(raw_socket, server_side=self.is_server)
             # Mutual TLS Check: Who is on the other end?
-            peer_cert: Dict[str, Any] | None = tls_socket.getpeercert(binary_form=True)
+            peer_cert: bytes | None = tls_socket.getpeercert(binary_form=True)
 
             if peer_cert:
                 fingerprint: str = get_public_key_fingerprint(peer_cert)
