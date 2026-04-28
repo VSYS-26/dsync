@@ -7,7 +7,7 @@ def bridge_sockets(source: socket.socket, destination: socket.socket) -> None:
     '''
     Continuously forwards data traffic from a source socket to a destination socket.
 
-    This funtion reads up to 4096 bytes from the source socket in an infinite loop
+    This function reads up to 4096 bytes from the source socket in an infinite loop
     and sends them directly to the destination socket.
     The loop is interrupted as soon as the connection is closed (no more data is received)
     or a network error occurs.
