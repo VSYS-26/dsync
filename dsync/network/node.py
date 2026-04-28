@@ -70,10 +70,7 @@ class P2PNode:
                     raise Exception(f"[-] Unknown device! Fingerprint: {fingerprint}")
             
             else:
-                if self.is_server:
-                    print("[*] Info: Client connected.")
-                else:
-                    raise Exception("The server did not present a certificate!")
+                raise Exception("Peer did not present a certificate. Mutual TLS authentication required.")
             
             if self.is_server:
                 # Server sends first, then waits on answer
