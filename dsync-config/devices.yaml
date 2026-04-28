@@ -8,7 +8,7 @@
 #   # Example: another user's laptop.
 #   - id: laptop-anna
 #     fingerprint: <fingerprint-of-annas-laptop>
-#
+
 #   # Example: a home-lab backup server.
 #   - id: server-keller
 #     fingerprint: <fingerprint-of-keller-server>
