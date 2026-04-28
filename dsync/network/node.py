@@ -41,7 +41,7 @@ class P2PNode:
         self.key_path = key_path
         self.trusted_devices = trusted_devices
 
-    def handle_secure_connection(self, raw_socket: socket.socket) -> None:
+    def handle_secure_connection(self, raw_socket: socket.socket) -> bool:
         '''
         Takes an unencrypted socket connection, converts it into a secure TLS connection,
         and authenticates the communication partner (Mutual TLS).
@@ -92,6 +92,8 @@ class P2PNode:
         except Exception as e:
             print(f"[!] Connection error: {e}")
             raw_socket.close()
+            return False
+        return True
 
     def start_sync(self, tls_socket: ssl.SSLSocket) -> None:
         '''
