@@ -4,7 +4,6 @@ import socket
 
 from pathlib import Path
 from typing import Annotated, Optional, Dict
-from pyp2p.net import Net
 
 from dsync.cli.console import info, success
 from dsync.network.node import P2PNode
@@ -27,8 +26,14 @@ def load_trusted_devices() -> Dict[str, str]:
     if config_path.exists():
         with open(config_path, "r") as f:
             data = yaml.safe_load(f)
-            return data.get("trusted_devices", {})
+            if not isinstance(data, dict):
+                return {}
 
+            trusted_devices = data.get("trusted_devices", {})
+            if not isinstance(trusted_devices, dict):
+                return {}
+
+            return trusted_devices
     return {}
 
 @app.command("start")
@@ -72,13 +77,14 @@ def start_p2p_sync(
         success("Connected to relay. Waiting on partner peer...")
     else:
         # LAN mode
-        if mode == "server":
+        if is_server:
             raw_socket.bind(('0.0.0.0', port))
             raw_socket.listen(1)
             raw_socket, _ = raw_socket.accept()
         else:
             raw_socket.connect(('127.0.0.1', port))
     
-    node.handle_secure_connection(raw_socket)
+    transfer_completed = node.handle_secure_connection(raw_socket)
 
-    success("Data transfer completed.")
+    if transfer_completed:
+        success("Data transfer completed.")
