@@ -8,24 +8,24 @@
 
 ## Kontext
 
->Die Anwendung benötigt eine flexible und leicht anpassbare Konfiguration, die sowohl von Entwickler:innen als auch von technisch weniger versierten Nutzer:innen verstanden und bearbeitet werden kann.
->
-> Ziel ist es, ein Format zu wählen, das:
->
-> * gut lesbar ist
-> * einfach erweitert werden kann
+Die Anwendung benötigt eine flexible und leicht anpassbare Konfiguration, die sowohl von Entwickler:innen als auch von technisch weniger versierten Nutzer:innen verstanden und bearbeitet werden kann.
+
+ Ziel ist es, ein Format zu wählen, das:
+
+ * gut lesbar ist
+ * einfach erweitert werden kann
 
 ## Entscheidung
 
-> Für die Konfiguration der Anwendung wird YAML als Standardformat verwendet.
+Für die Konfiguration der Anwendung wird YAML als Standardformat verwendet.
 
 ## Begründung
 
-> YAML bietet eine sehr gute Balance zwischen Lesbarkeit und Ausdrucksstärke. Durch die reduzierte Syntax und die Möglichkeit, verschachtelte Strukturen übersichtlich darzustellen, eignet es sich besonders gut für Konfigurationsdateien.
-> 
-> Im Vergleich zu anderen Formaten ist YAML weniger "visuell laut" (keine vielen Klammern oder Anführungszeichen) und dadurch einfacher zu erfassen - gerade bei komplexeren Konfigurationen.
-> 
-> Zusätzlich wird YAML von vielen Tools im Ökosystem bereits unterstützt (z.B. CI/CD-Pipelines wie GitHub Actions oder Konfigurationssysteme wie Kubernetes), was die Integration erleichtert und den Lernaufwand reduziert.
+YAML bietet eine sehr gute Balance zwischen Lesbarkeit und Ausdrucksstärke. Durch die reduzierte Syntax und die Möglichkeit, verschachtelte Strukturen übersichtlich darzustellen, eignet es sich besonders gut für Konfigurationsdateien.
+
+Im Vergleich zu anderen Formaten ist YAML weniger "visuell laut" (keine vielen Klammern oder Anführungszeichen) und dadurch einfacher zu erfassen - gerade bei komplexeren Konfigurationen.
+
+Zusätzlich wird YAML von vielen Tools im Ökosystem bereits unterstützt (z.B. CI/CD-Pipelines wie GitHub Actions oder Konfigurationssysteme wie Kubernetes), was die Integration erleichtert und den Lernaufwand reduziert.
 
 ### Betrachtete Alternativen
 
