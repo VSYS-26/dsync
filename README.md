@@ -70,7 +70,7 @@ To test the peer-to-peer connection on your local machine, you need to simulate 
 Before two peers can communicate, they need their cryptographic identities.
 
    1. Generate the self-signed certificates and private keys for your nodes. The script will output a SHA-256 fingerprint.
-   2. Create a configuration file at dsyn_config/devices.yaml.
+   2. Create a configuration file at dsync_config/devices.yaml.
    3. Add the fingerprints of the trusted devices to this file to authorize them (Mutual TLS authentication):
    ```yaml
    trusted_devices:
