@@ -8,6 +8,103 @@ dependencies = [
     "cryptography>=47.0.0",
     "pre-commit>=4.5.1",
     "pyp2p>=0.8.3",
+    "pydantic>=2.10",
+    "pyyaml>=6.0.2",
     "rich>=15.0.0",
+    "ruff>=0.6.0",
     "typer>=0.24.1",
 ]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "A",
+    "DOC",
+    "D",
+    "E",
+    "W",
+    "F",
+    "I",
+    "N",
+    "UP",
+    "FA",
+    "TC",
+    "PTH",
+    "B",
+    "DTZ",
+    "EM",
+    "ISC",
+    "ICN",
+    "PIE",
+    "PT",
+    "Q",
+    "RSE",
+    "RET",
+    "SIM",
+    "TID",
+    "ARG",
+    "ERA",
+    "PGH",
+    "TRY",
+    "RUF",
+]
+ignore = [
+    "E501",
+    "PLR0913",
+    "PLR2004",
+    "TRY003",
+    "EM101",
+    "EM102",
+]
+task-tags = ["TODO", "FIXME"]
+
+[tool.ruff.lint.isort]
+force-sort-within-sections = true
+combine-as-imports = true
+force-single-line = false
+split-on-trailing-comma = true
+
+[tool.ruff.lint.mccabe]
+max-complexity = 17
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "lf"
+
+[tool.ruff.lint.pylint]
+max-args = 10
+max-branches = 20
+max-returns = 8
+max-statements = 90
+
+[tool.ruff.lint.flake8-quotes]
+inline-quotes = "double"
+multiline-quotes = "double"
+docstring-quotes = "double"
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+pretty = true
+show_error_codes = true
+warn_unreachable = true
+exclude = ["^tests/"]
+
+[[tool.mypy.overrides]]
+module = [
+    "cryptography.*",
+    "rich.*",
+    "typer.*",
+]
+ignore_missing_imports = true
+
+[tool.bandit]
+exclude_dirs = ["tests", ".venv"]
+skips = ["B101"]

@@ -1,8 +1,10 @@
+"""CLI root Typer app."""
+
 import typer
 
-from dsync.cli.commands import _demo
+from dsync.cli.callbacks.config_dir import config_dir
+from dsync.cli.commands import _demo, sync
 from dsync.cli.commands._hello import hello
-from dsync.cli.commands import sync
 
 cli: typer.Typer = typer.Typer(
     name="dsync",
@@ -10,6 +12,9 @@ cli: typer.Typer = typer.Typer(
     no_args_is_help=True,
     rich_markup_mode="rich",
 )
+
+# callbacks
+cli.callback()(config_dir)
 
 # commands
 cli.command()(hello)
