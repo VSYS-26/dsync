@@ -6,9 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "cryptography>=47.0.0",
-    "future>=1.0.0",
     "pre-commit>=4.5.1",
-    "psutil>=7.2.2",
     "pyp2p>=0.8.3",
     "rich>=15.0.0",
     "typer>=0.24.1",
