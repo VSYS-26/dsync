@@ -76,17 +76,21 @@ def get_public_key_fingerprint(cert_der: bytes) -> str:
 
 
 def create_tls_context(is_server: bool, cert_path: str, key_path: str) -> ssl.SSLContext:
-    '''
-    Creates the SSL context for the client or server.
-    '''
     purpose = ssl.Purpose.CLIENT_AUTH if is_server else ssl.Purpose.SERVER_AUTH
     context = ssl.create_default_context(purpose)
 
-    # Upload your own certificate to verify your identity
     context.load_cert_chain(certfile=cert_path, keyfile=key_path)
 
-    # Disable CA security checks
+    # Disable hostname checks (irrelevant for P2P)
     context.check_hostname = False
-    context.verify_mode = ssl.CERT_NONE
+
+    if is_server:
+        # Request client certificate, but do not enforce CA verification.
+        # Verification is done manually from the fingerprint whitelist.
+        context.verify_mode = ssl.CERT_OPTIONAL
+    else:
+        # Client does not need to verify the server’s certificate via CAs;
+        # it will manually check the fingerprint after the handshake.
+        context.verify_mode = ssl.CERT_NONE
 
     return context
