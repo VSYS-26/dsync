@@ -4,6 +4,9 @@ import time
 import ssl
 
 from typing import Dict, Any
+
+from dsync.state import AppState
+
 from .p2p_core import create_tls_context, get_public_key_fingerprint, send_msg, recv_msg
 
 MSG_SYNC_HASHES = 1
@@ -23,7 +26,7 @@ class P2PNode:
         is_server: bool,
         cert_path: str,
         key_path: str,
-        trusted_devices: Dict[str, str]
+        state: AppState
     ) -> None:
         '''
         Initializes a new P2P node.
@@ -33,13 +36,17 @@ class P2PNode:
                             or as a client (establishes connections).
             cert_path (str): The file path to ones own TLS certificate (.pem).
             key_path (str): The file path to ones own private key (.pem).
-            trusted_devices (Dict[str, str]): A dictionary that maps certificate fingerprints (keys)
-                                            to device names (values). Serves as a whitelist.
+            state (AppState): The global application runtime state containing configurations.
         '''
         self.is_server = is_server
         self.cert_path = cert_path
         self.key_path = key_path
-        self.trusted_devices = trusted_devices
+        self.state = state
+
+        self.trusted_devices: Dict[str, str] = {
+            device.fingerprint: device.id
+            for device in self.state.devices.trusted_devices
+        } 
 
     def handle_secure_connection(self, raw_socket: socket.socket) -> bool:
         '''

@@ -87,20 +87,22 @@ This project uses [uv](https://docs.astral.sh/uv/) for fast Python dependency ma
 
 ---
 
-## Testing locally (Relay Setup)
+## Testing locally
 
-To test the peer-to-peer connection on your local machine, you need to simulate two devices and one relay server. This requires three separate terminal windows.
+To test the peer-to-peer connection on your local machine, you need to simulate two devices communicating directly. This requires two separate terminal windows.
 
 #### **1. Generate Certificates & Setup Trust**
 
 Before two peers can communicate, they need their cryptographic identities.
 
-   1. Generate the self-signed certificates and private keys for your nodes. The script will output a SHA-256 fingerprint.
-   2. Create a configuration file at dsync-config/devices.yaml.
-   3. Add the fingerprints of the trusted devices to this file to authorize them (Mutual TLS authentication):
+   1. Generate a self-signed certificate and private key for your local test. The script/command will output a SHA-256 fingerprint for the public key.
+   (Note: Since both local nodes will run in the same directory, they will share this certificate to authenticate each other during the local test).
+   2. Create or edit the configuration file at dsync-config/devices.yaml.
+   3. Add the generated fingerprint to this file to authorize the connection (Mutual TLS authentication):
    ```yaml
    trusted_devices:
-      "YOUR_GENERATED_FINGERPRINT_HASH_HERE": "Peer B (Laptop)"
+      - id: local-test-node
+        fingerprint: "YOUR_GENERATED_FINGERPRINT_HASH_HERE"
    ```
 #### **2. Run the two Terminals**
 
@@ -108,14 +110,14 @@ Open two separate terminals in the root directory of the project.
 
 **Terminal 1: Start Node A (Server mode)**
 
-This node connects to the relay and waits for a trusted partner.
+This node opens a local port (default 9999) and waits for a trusted partner to connect.
 ```bash
 uv run python -m dsync.main sync start --mode server
 ```
 
 **Terminal 2: Start Node B (Client mode)**
 
-This node connects to the relay and initiates the handshake and sync process.
+This node connects directly to the local server and initiates the Mutual TLS handshake and sync process.
 ```bash
 uv run python -m dsync.main sync start --mode client
 ```

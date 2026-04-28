@@ -81,6 +81,9 @@ def create_tls_context(is_server: bool, cert_path: str, key_path: str) -> ssl.SS
 
     context.load_cert_chain(certfile=cert_path, keyfile=key_path)
 
+    # Für Testzwecke gedacht
+    context.load_verify_locations(cafile=cert_path)
+
     # Disable hostname checks (irrelevant for P2P)
     context.check_hostname = False
 
