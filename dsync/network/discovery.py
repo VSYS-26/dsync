@@ -9,7 +9,7 @@ from zeroconf import IPVersion, ServiceBrowser, ServiceInfo, ServiceListener, Ze
 
 from dsync.identity import DiscoveredPeer, PeerMapStore
 
-SERVICE_TYPE = "_dsync-peer._udp.local."
+SERVICE_TYPE = "_dsync-peer._tcp.local."
 DEFAULT_DISCOVERY_SECONDS = 10
 
 
