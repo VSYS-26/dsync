@@ -1,3 +1,5 @@
+"""CLI command to discover peers on the local network and persist a peer map."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -12,7 +14,9 @@ from dsync.network.discovery import PeerDiscoveryRunner
 
 
 def discover(
-    seconds: Annotated[int, typer.Option("--seconds", "-s", help="Discovery duration in seconds")] = 10,
+    seconds: Annotated[
+        int, typer.Option("--seconds", "-s", help="Discovery duration in seconds")
+    ] = 10,
     map_file: Annotated[
         Path,
         typer.Option(
@@ -43,4 +47,3 @@ def discover(
     success(f"Active peers: {len(peers)}")
     for peer in peers.values():
         info(f"{peer.fingerprint} -> {peer.ipv4} (expires_at={peer.expires_at})")
-

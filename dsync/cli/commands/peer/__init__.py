@@ -1,3 +1,5 @@
+"""Top-level `peer` CLI group exposing announce/discover/map commands."""
+
 from __future__ import annotations
 
 import typer
@@ -11,4 +13,3 @@ app: typer.Typer = typer.Typer(help="Peer discovery commands", no_args_is_help=T
 app.command()(announce)
 app.command()(discover)
 app.command(name="map")(show_map)
-

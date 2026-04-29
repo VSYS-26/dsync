@@ -1,3 +1,5 @@
+"""Network helpers for dsync: discovery and announcing of peers."""
+
 from __future__ import annotations
 
 from .discovery import (
@@ -13,4 +15,3 @@ __all__ = [
     "FingerprintAnnouncer",
     "PeerDiscoveryRunner",
 ]
-

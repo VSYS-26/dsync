@@ -96,6 +96,7 @@ pretty = true
 show_error_codes = true
 warn_unreachable = true
 exclude = ["^tests/"]
+mypy_path = ["stubs"]
 
 [[tool.mypy.overrides]]
 module = [

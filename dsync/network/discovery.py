@@ -1,13 +1,17 @@
+"""Peer discovery utilities: announce and discover peers on the LAN."""
+
 from __future__ import annotations
 
+from dataclasses import dataclass
 import socket
 import time
-from dataclasses import dataclass
-from typing import cast
+from typing import TYPE_CHECKING
 
 from zeroconf import IPVersion, ServiceBrowser, ServiceInfo, ServiceListener, Zeroconf
 
-from dsync.identity import DiscoveredPeer, PeerMapStore
+if TYPE_CHECKING:
+    # Imported for type checking only to avoid runtime import cycles
+    from dsync.identity import DiscoveredPeer, PeerMapStore
 
 SERVICE_TYPE = "_dsync-peer._tcp.local."
 DEFAULT_DISCOVERY_SECONDS = 10
@@ -34,13 +38,19 @@ class _PeerListener(ServiceListener):
         self._stats = stats
         self._own_fingerprint = own_fingerprint
 
-    def add_service(self, zeroconf: Zeroconf, service_type: str, name: str) -> None:
+    def add_service(self, _zeroconf: Zeroconf, service_type: str, name: str) -> None:
+        """Handle a newly added service (callback from Zeroconf)."""
         self._handle_event(service_type, name)
 
-    def update_service(self, zeroconf: Zeroconf, service_type: str, name: str) -> None:
+    def update_service(self, _zeroconf: Zeroconf, service_type: str, name: str) -> None:
+        """Handle a service update (callback from Zeroconf)."""
         self._handle_event(service_type, name)
 
-    def remove_service(self, zeroconf: Zeroconf, service_type: str, name: str) -> None:
+    def remove_service(self, _zeroconf: Zeroconf, _service_type: str, _name: str) -> None:
+        """Handle service removal (callback from Zeroconf).
+
+        The removal callback is only used to purge expired entries.
+        """
         self._store.purge_expired()
 
     def _handle_event(self, service_type: str, name: str) -> None:
@@ -77,7 +87,7 @@ def _read_fingerprint(info: ServiceInfo) -> str:
 
 def _extract_ipv4(info: ServiceInfo) -> str | None:
     if hasattr(info, "parsed_addresses"):
-        parsed = cast(list[str], info.parsed_addresses(version=IPVersion.V4Only))
+        parsed = info.parsed_addresses(version=IPVersion.V4Only)
         for value in parsed:
             try:
                 return str(socket.inet_ntoa(socket.inet_aton(value)))
@@ -107,12 +117,14 @@ class FingerprintAnnouncer:
     """Announces the local fingerprint in the LAN via mDNS/Zeroconf."""
 
     def __init__(self, fingerprint: str, service_port: int = 0) -> None:
+        """Create a new announcer for `fingerprint` broadcasting on `service_port`."""
         self._fingerprint = fingerprint
         self._service_port = service_port
         self._zeroconf: Zeroconf | None = None
         self._service_info: ServiceInfo | None = None
 
     def start(self) -> None:
+        """Start announcing the fingerprint on the local network."""
         if self._zeroconf is not None:
             return
 
@@ -131,6 +143,7 @@ class FingerprintAnnouncer:
         self._zeroconf.register_service(self._service_info)
 
     def stop(self) -> None:
+        """Stop announcing and clean up Zeroconf resources."""
         if self._zeroconf is None:
             return
 
@@ -145,6 +158,7 @@ class PeerDiscoveryRunner:
     """Runs a short discovery window and writes events into the peer map store."""
 
     def __init__(self, store: PeerMapStore) -> None:
+        """Initialize with a `PeerMapStore` used to persist discovered peers."""
         self._store = store
 
     def discover(
@@ -152,6 +166,7 @@ class PeerDiscoveryRunner:
         duration_seconds: int = DEFAULT_DISCOVERY_SECONDS,
         own_fingerprint: str | None = None,
     ) -> tuple[dict[str, DiscoveredPeer], DiscoveryStats]:
+        """Perform discovery for up to `duration_seconds` and return peers and stats."""
         stats = DiscoveryStats()
         zeroconf = Zeroconf(ip_version=IPVersion.V4Only)
         listener = _PeerListener(
@@ -172,4 +187,3 @@ class PeerDiscoveryRunner:
             zeroconf.close()
 
         return self._store.list_peers(), stats
-

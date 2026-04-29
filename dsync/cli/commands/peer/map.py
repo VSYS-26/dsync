@@ -1,3 +1,5 @@
+"""CLI command to show the peer map stored locally."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -26,4 +28,3 @@ def show_map(
 
     for peer in peers.values():
         info(f"{peer.fingerprint} -> {peer.ipv4} (expires_at={peer.expires_at})")
-

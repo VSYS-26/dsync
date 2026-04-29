@@ -1,3 +1,5 @@
+"""CLI command to announce this host's fingerprint via mDNS/zeroconf."""
+
 from __future__ import annotations
 
 import time
@@ -11,7 +13,9 @@ from dsync.network.discovery import FingerprintAnnouncer
 
 
 def announce(
-    seconds: Annotated[int, typer.Option("--seconds", "-s", help="Broadcast duration in seconds")] = 30,
+    seconds: Annotated[
+        int, typer.Option("--seconds", "-s", help="Broadcast duration in seconds")
+    ] = 30,
 ) -> None:
     """Broadcast this device fingerprint over local multicast."""
     try:
@@ -33,4 +37,3 @@ def announce(
         announcer.stop()
 
     success("Announce finished")
-
