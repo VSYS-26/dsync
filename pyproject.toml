@@ -12,6 +12,7 @@ dependencies = [
     "typer>=0.24.1",
     "cryptography>=45.0.0",
     "ruff>=0.6.0",
+    "zeroconf>=0.148.0",
 ]
 
 [tool.ruff]
@@ -95,6 +96,7 @@ pretty = true
 show_error_codes = true
 warn_unreachable = true
 exclude = ["^tests/"]
+mypy_path = ["stubs"]
 
 [[tool.mypy.overrides]]
 module = [

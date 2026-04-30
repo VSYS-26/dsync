@@ -3,7 +3,7 @@
 import typer
 
 from dsync.cli.callbacks.config_dir import config_dir
-from dsync.cli.commands import _demo
+from dsync.cli.commands import _demo, peer
 from dsync.cli.commands._hello import hello
 
 cli: typer.Typer = typer.Typer(
@@ -19,3 +19,4 @@ cli.callback()(config_dir)
 # commands
 cli.command()(hello)
 cli.add_typer(_demo.app, name="demo")
+cli.add_typer(peer.app, name="peer")
