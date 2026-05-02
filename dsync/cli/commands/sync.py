@@ -1,15 +1,12 @@
 """CLI commands for sync operations."""
 
-from pathlib import Path
 import socket
 from typing import Annotated
 
 import typer
-import yaml
 
 from dsync.cli.console import info, success
 from dsync.network.node import P2PNode
-
 from dsync.state import AppState
 
 app: typer.Typer = typer.Typer()
