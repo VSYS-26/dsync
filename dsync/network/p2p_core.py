@@ -1,13 +1,9 @@
-import ssl
-import hashlib
+import asyncio
 import struct
-import socket
 
 from typing import Tuple, Optional, Union
-from cryptography import x509 
-from cryptography.hazmat.primitives import serialization
 
-def send_msg(sock: Union[socket.socket, ssl.SSLSocket], msg_type: int, data: bytes) -> None:
+async def asyn_send_msg(writer: asyncio.StreamWriter, msg_type: int, data: bytes) -> None:
     '''
     Sends a message with a length prefix and type.
     
@@ -18,9 +14,10 @@ def send_msg(sock: Union[socket.socket, ssl.SSLSocket], msg_type: int, data: byt
     '''
     # ! = Network Byte Order, B = unsigned char, I = unsigned int
     header = struct.pack("!BI", msg_type, len(data))
-    sock.sendall(header + data)
+    writer.write(header + data)
+    await writer.drain()
 
-def recv_msg(sock: Union[socket.socket, ssl.SSLSocket]) -> Tuple[Optional[int], Optional[bytes]]:
+async def async_recv_msg(reader: asyncio.StreamReader) -> Tuple[Optional[int], Optional[bytes]]:
     '''
     Receives a message exactly based on its length.
     
@@ -30,22 +27,19 @@ def recv_msg(sock: Union[socket.socket, ssl.SSLSocket]) -> Tuple[Optional[int], 
     Returns:
         Tuple containing the message type and the payload.
     '''
-    header = sock.recv(5)
-    if not header or len(header) < 5:
+    try:
+        header = await reader.readexactly(5)
+    except asyncio.IncompleteReadError:
         return None, None
     
-    msg_type, length = struct.unpack("!BI", header)
+    msg_type, length = struct.update("!BI", header)
 
-    chunks = []
-    bytes_recvd = 0
-    while bytes_recvd < length:
-        chunk = sock.recv(min(length - bytes_recvd, 4096))
-        if not chunk:
-            raise RuntimeError("Connection lost during reception.")
-        chunks.append(chunk)
-        bytes_recvd += len(chunk)
+    try:
+        data = await reader.readexactly(length)
+    except asyncio.IncompleteReadError:
+        raise RuntimeError("Connection lost during reception.")
           
-    return msg_type, b"".join(chunks)
+    return msg_type, data
 
 def get_public_key_fingerprint(cert_der: bytes) -> str:
     '''

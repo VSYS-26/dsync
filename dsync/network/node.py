@@ -1,7 +1,9 @@
-import yaml
+import asyncio
 import socket
-import time
 import ssl
+import time
+import yaml
+
 
 from typing import Dict, Any
 
@@ -11,7 +13,6 @@ from .p2p_core import create_tls_context, get_public_key_fingerprint, send_msg, 
 
 MSG_SYNC_HASHES = 1
 MSG_REQUEST_CHUNKS = 2
-MSG_CHUNK_DATA = 3
 
 class P2PNode:
     '''
@@ -48,7 +49,7 @@ class P2PNode:
             for device in self.state.devices.trusted_devices
         } 
 
-    def handle_secure_connection(self, raw_socket: socket.socket) -> bool:
+    async def handle_secure_connection(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         '''
         Takes an unencrypted socket connection, converts it into a secure TLS connection,
         and authenticates the communication partner (Mutual TLS).
@@ -64,9 +65,8 @@ class P2PNode:
 
         try:
             # TLS Wrap
-            tls_socket = context.wrap_socket(raw_socket, server_side=self.is_server)
-            # Mutual TLS Check: Who is on the other end?
-            peer_cert: bytes | None = tls_socket.getpeercert(binary_form=True)
+            ssl_object = writer.get_extra_info('ssl_object')
+            peer_cert = ssl_object.getpeercert(binary_form=True) if ssl_object else None
 
             if peer_cert:
                 fingerprint: str = get_public_key_fingerprint(peer_cert)
@@ -81,25 +81,25 @@ class P2PNode:
             
             if self.is_server:
                 # Server sends first, then waits on answer
-                tls_socket.sendall(b"Hello from server. Data sync can start.")
-                answer = tls_socket.recv(1024)
+                writer.write(b"Hello from server. Data sync can start.")
+                answer = await reader.read(1024)
                 print(f"[*] Message from client: {answer.decode('utf-8')}")
             else:
                 # Client waits on message, then sends answer
-                msg = tls_socket.recv(1024)
+                msg = await reader.read(1024)
                 print(f"[*] Message from server: {msg.decode('utf-8')}")
-                tls_socket.sendall(b"Hello from client. I'm ready.")
+                writer.write(b"Hello from client. I'm ready.")
+                await writer.drain()
 
-            time.sleep(1)
-            self.start_sync(tls_socket)
+            await self.start_sync(reader, writer)
             
         except Exception as e:
             print(f"[!] Connection error: {e}")
-            raw_socket.close()
-            return False
-        return True
+        finally:
+            writer.close()
+            await writer.wait_closed()
 
-    def start_sync(self, tls_socket: ssl.SSLSocket) -> None:
+    async def start_sync(self, host: str, port: int):
         '''
         Starts the data synchronization process over an already established, secure TLS connection.
 
@@ -110,28 +110,21 @@ class P2PNode:
         Args:
             tls_socket (ssl.SSLSocket): The encrypted socket trough which messages are exchanged.
         '''
+        context = create_tls_context(self.is_server, self.cert_path, self.key_path)
+
         if self.is_server:
-            print("[*] Wait on hash list from peer...")
-            msg_type, data = recv_msg(tls_socket)
-            if msg_type == MSG_SYNC_HASHES and data is not None:
-                remote_hashes: Dict[str, str] = yaml.safe_load(data.decode('utf-8'))
-                print(f"[*] Received hashes: {remote_hashes}")
-
-                missing = ["chunk_2", "chunk_3"]
-
-                print("[*] Request missing chunks...")
-                request_data: bytes = yaml.dump(missing).encode('utf-8')
-                send_msg(tls_socket, MSG_REQUEST_CHUNKS, request_data)
+            server = await asyncio.start_server(
+                self.handle_secure_connection, host, port, ssl=context
+            )
+            print(f"[+] Server runs asynchroniously on {host}:{port}")
+            async with server:
+                await server.serve_forever()
 
         else:
-            my_hashes: Dict[str, str] = {"chunk_1": "abc...", "chunk_2": "def...", "chunk_3": "ghi..."}
-            print("[*] Send file hashes...")
-            send_msg(tls_socket, MSG_SYNC_HASHES, yaml.dump(my_hashes).encode('utf-8'))
-
-            msg_type, data = recv_msg(tls_socket)
-            if msg_type == MSG_REQUEST_CHUNKS and data is not None:
-                requested_chunks = yaml.safe_load(data.decode('utf-8'))
-                print(f"[*] Peer requests: {requested_chunks}")
-            
-        tls_socket.close()
-        print("[+] Sync finished.")
+            try:
+                reader, writer = await asyncio.open_connection(
+                    host, port, ssl=context
+                )
+                await self.handle_secure_connection(reader, writer)
+            except Exception as e:
+                print(f"[!] Connection error: {e}")
