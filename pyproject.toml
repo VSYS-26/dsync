@@ -13,6 +13,8 @@ dependencies = [
     "cryptography>=45.0.0",
     "ruff>=0.6.0",
     "zeroconf>=0.148.0",
+    "keyring>=25.7.0",
+    "keyrings-alt>=5.0.2",
 ]
 
 [tool.ruff]
@@ -103,6 +105,7 @@ module = [
     "cryptography.*",
     "rich.*",
     "typer.*",
+    "keyring.*",
 ]
 ignore_missing_imports = true
 
