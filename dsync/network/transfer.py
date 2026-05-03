@@ -24,8 +24,26 @@ class MsgType(IntEnum):
 
 
 DEFAULT_CHUNK_SIZE = 64 * 1024
+MAX_META_SIZE = 8 * 1024
+MAX_CHUNK_SIZE = DEFAULT_CHUNK_SIZE
 HEADER = "!BI"
 HEADER_SIZE = struct.calcsize(HEADER)
+
+
+class TransferError(Exception):
+    """Base class for transfer-related errors."""
+
+
+class FrameValidationError(TransferError):
+    """Raised when a frame header or length is invalid."""
+
+
+class ChunkValidationError(TransferError):
+    """Raised when a file chunk violates the expected transfer contract."""
+
+
+class TransferIntegrityError(TransferError):
+    """Raised when the received data fails integrity checks."""
 
 
 @dataclass(frozen=True)
@@ -68,8 +86,23 @@ async def _recv_frame(reader: asyncio.StreamReader) -> tuple[MsgType, bytes]:
     """Read one length-prefixed frame from ``reader``."""
     header = await reader.readexactly(HEADER_SIZE)
     raw_type, length = struct.unpack(HEADER, header)
+    try:
+        msg_type = MsgType(raw_type)
+    except ValueError as exc:
+        msg = "Unknown frame type"
+        raise FrameValidationError(msg) from exc
+    if msg_type == MsgType.FILE_META:
+        max_len = MAX_META_SIZE
+    elif msg_type == MsgType.FILE_CHUNK:
+        max_len = MAX_CHUNK_SIZE
+    else:
+        msg = "Unsupported frame type"
+        raise FrameValidationError(msg)
+    if length > max_len:
+        msg = "Frame payload exceeds maximum allowed size"
+        raise FrameValidationError(msg)
     payload = await reader.readexactly(length)
-    return MsgType(raw_type), payload
+    return msg_type, payload
 
 
 async def send_file(writer: asyncio.StreamWriter, path: Path) -> None:
@@ -108,8 +141,8 @@ async def _recv_and_verify_chunks(
         meta: Metadata previously read from the peer.
 
     Raises:
-        ValueError: If a non-chunk frame appears or the SHA-256 digest of
-            the received bytes does not match ``meta.sha256``.
+        TransferError: If a frame or chunk violates the transfer contract
+            or the SHA-256 digest does not match ``meta.sha256``.
     """
     digest = hashlib.sha256()
     received = 0
@@ -118,14 +151,21 @@ async def _recv_and_verify_chunks(
             msg_type, payload = await _recv_frame(reader)
             if msg_type != MsgType.FILE_CHUNK:
                 msg = "Unexpected frame during file transfer"
-                raise ValueError(msg)
+                raise ChunkValidationError(msg)
+            remaining = meta.size - received
+            if not payload:
+                msg = "Received empty file chunk"
+                raise ChunkValidationError(msg)
+            if len(payload) > remaining:
+                msg = "Received chunk exceeds declared file size"
+                raise ChunkValidationError(msg)
             await asyncio.to_thread(f.write, payload)
             digest.update(payload)
             received += len(payload)
 
     if digest.hexdigest() != meta.sha256:
         msg = "SHA-256 mismatch after transfer"
-        raise ValueError(msg)
+        raise TransferIntegrityError(msg)
 
 
 async def recv_file(reader: asyncio.StreamReader, target_dir: Path) -> Path:
@@ -143,13 +183,13 @@ async def recv_file(reader: asyncio.StreamReader, target_dir: Path) -> Path:
         Absolute path of the written file.
 
     Raises:
-        ValueError: If frames arrive in the wrong order or the SHA-256
+        TransferError: If frames arrive in the wrong order or the SHA-256
             digest of the received bytes does not match ``meta.sha256``.
     """
     msg_type, data = await _recv_frame(reader)
     if msg_type != MsgType.FILE_META:
         msg = "Missing file meta frame"
-        raise ValueError(msg)
+        raise TransferIntegrityError(msg)
     meta = FileMeta.from_yaml(data)
 
     target = target_dir / Path(meta.name).name
@@ -158,4 +198,4 @@ async def recv_file(reader: asyncio.StreamReader, target_dir: Path) -> Path:
     except BaseException:
         target.unlink(missing_ok=True)
         raise
-    return target
+    return target.resolve()
