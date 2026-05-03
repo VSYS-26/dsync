@@ -1,10 +1,12 @@
+"""Ed25519 keypair generation, persistence and fingerprinting."""
+
 from __future__ import annotations
 
 import base64
 import hashlib
 import os
-import platform
 from pathlib import Path
+import platform
 from typing import Literal
 
 from cryptography.hazmat.primitives import serialization
@@ -29,11 +31,14 @@ def default_key_paths(app_name: str = "dsync") -> tuple[Path, Path]:
     return key_dir / "id_ed25519.pem", key_dir / "id_ed25519.pub"
 
 
-def _resolve_key_paths(private_path: str | Path | None, public_path: str | Path | None) -> tuple[Path, Path]:
+def _resolve_key_paths(
+    private_path: str | Path | None, public_path: str | Path | None
+) -> tuple[Path, Path]:
     default_private_path, default_public_path = default_key_paths()
     private_target = Path(private_path) if private_path is not None else default_private_path
     public_target = Path(public_path) if public_path is not None else default_public_path
     return private_target, public_target
+
 
 def generate_keypair() -> tuple[bytes, bytes]:
     """Generate an Ed25519 keypair and return both keys as PEM bytes."""
@@ -85,7 +90,7 @@ def public_key_fingerprint(public_key_pem: bytes, fmt: FingerprintFormat = "hex"
     """Create a stable fingerprint from the public key (SHA-256 over raw Ed25519 bytes)."""
     public_key = serialization.load_pem_public_key(public_key_pem)
     if not isinstance(public_key, Ed25519PublicKey):
-        raise ValueError("Only Ed25519 public keys are supported")
+        raise TypeError("Only Ed25519 public keys are supported")
 
     public_raw = public_key.public_bytes(
         encoding=serialization.Encoding.Raw,
@@ -98,4 +103,3 @@ def public_key_fingerprint(public_key_pem: bytes, fmt: FingerprintFormat = "hex"
     if fmt == "base64url":
         return "b64u-" + base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
     raise ValueError(f"Unsupported fingerprint format: {fmt}")
-

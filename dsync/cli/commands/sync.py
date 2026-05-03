@@ -1,14 +1,17 @@
 """CLI commands for sync operations."""
 
-import asyncio
-from typing import Annotated
+from __future__ import annotations
+
+import socket
+from typing import TYPE_CHECKING, Annotated
 
 import typer
 
-from dsync.cli.console import info
+from dsync.cli.console import info, success
 from dsync.network.node import P2PNode
 
-from dsync.state import AppState
+if TYPE_CHECKING:
+    from dsync.state import AppState
 
 app: typer.Typer = typer.Typer()
 
@@ -43,9 +46,21 @@ def start_p2p_sync(
     is_server: bool = mode.lower() == "server"
     node = P2PNode(is_server, cert, key, state)
 
-    host = "0.0.0.0" if is_server else "127.0.0.1"
+    raw_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-    try:
-        asyncio.run(node.start_sync(host, port))
-    except KeyboardInterrupt:
-        info("Shutting down...")
+    # LAN mode
+    if is_server:
+        info(f"Starting server on port {port}, waiting for connection...")
+        raw_socket.bind(("0.0.0.0", port))  # nosec B104
+        raw_socket.listen(1)
+        raw_socket, _ = raw_socket.accept()
+        success("Client connected.")
+    else:
+        info(f"Connecting to server on 127.0.0.1:{port}...")
+        raw_socket.connect(("127.0.0.1", port))
+        success("Connected to server.")
+
+    transfer_completed = node.handle_secure_connection(raw_socket)
+
+    if transfer_completed:
+        success("Data transfer completed.")

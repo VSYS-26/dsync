@@ -1,3 +1,5 @@
+"""Key generation, persistence and fingerprint helpers."""
+
 from __future__ import annotations
 
 from .keys import (
@@ -14,6 +16,6 @@ __all__ = [
     "default_key_paths",
     "generate_keypair",
     "load_keypair",
-    "save_keypair",
     "public_key_fingerprint",
+    "save_keypair",
 ]
