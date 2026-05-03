@@ -1,3 +1,5 @@
+"""Ed25519 keypair generation, persistence and fingerprinting."""
+
 from __future__ import annotations
 
 import base64
@@ -88,7 +90,7 @@ def public_key_fingerprint(public_key_pem: bytes, fmt: FingerprintFormat = "hex"
     """Create a stable fingerprint from the public key (SHA-256 over raw Ed25519 bytes)."""
     public_key = serialization.load_pem_public_key(public_key_pem)
     if not isinstance(public_key, Ed25519PublicKey):
-        raise ValueError("Only Ed25519 public keys are supported")
+        raise TypeError("Only Ed25519 public keys are supported")
 
     public_raw = public_key.public_bytes(
         encoding=serialization.Encoding.Raw,

@@ -1,3 +1,5 @@
+"""Key generation, persistence and fingerprint helpers."""
+
 from __future__ import annotations
 
 from .keys import (

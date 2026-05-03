@@ -1,5 +1,8 @@
+"""Self-signed cert + RSA key generation script."""
+
 import datetime
 import hashlib
+from pathlib import Path
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -42,7 +45,7 @@ def generate_self_signed_cert(cert_name: str = "cert.pem", key_name: str = "key.
     )
 
     # Save on drive
-    with open(key_name, "wb") as f:
+    with Path(key_name).open("wb") as f:
         f.write(
             private_key.private_bytes(
                 encoding=serialization.Encoding.PEM,
@@ -51,7 +54,7 @@ def generate_self_signed_cert(cert_name: str = "cert.pem", key_name: str = "key.
             )
         )
 
-    with open(cert_name, "wb") as f:
+    with Path(cert_name).open("wb") as f:
         f.write(cert.public_bytes(serialization.Encoding.PEM))
 
     # Calculate fingerprint for yaml

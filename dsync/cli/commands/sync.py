@@ -1,13 +1,17 @@
 """CLI commands for sync operations."""
 
+from __future__ import annotations
+
 import socket
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import typer
 
 from dsync.cli.console import info, success
 from dsync.network.node import P2PNode
-from dsync.state import AppState
+
+if TYPE_CHECKING:
+    from dsync.state import AppState
 
 app: typer.Typer = typer.Typer()
 

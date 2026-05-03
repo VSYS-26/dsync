@@ -1,3 +1,5 @@
+"""P2P node: TLS handshake, mutual auth and sync orchestration."""
+
 import socket
 import ssl
 import time
@@ -11,6 +13,10 @@ from .p2p_core import create_tls_context, get_public_key_fingerprint, recv_msg, 
 MSG_SYNC_HASHES = 1
 MSG_REQUEST_CHUNKS = 2
 MSG_CHUNK_DATA = 3
+
+
+class PeerAuthError(Exception):
+    """Raised when mutual TLS peer authentication fails."""
 
 
 class P2PNode:
@@ -41,8 +47,7 @@ class P2PNode:
         }
 
     def handle_secure_connection(self, raw_socket: socket.socket) -> bool:
-        """Takes an unencrypted socket connection, converts it into a secure TLS connection,
-        and authenticates the communication partner (Mutual TLS).
+        """Wrap ``raw_socket`` in TLS, authenticate the peer and run a hello handshake.
 
         The partner is rejected if they do not present a certificate or if their certificate
         fingerprint is not in the `trusted_devices` list. After successful check, a brief "Hello"
@@ -65,12 +70,12 @@ class P2PNode:
                 if fingerprint in self.trusted_devices:
                     print(f"[+] Verified: {self.trusted_devices[fingerprint]}")
                 else:
-                    raise Exception(f"[-] Unknown device! Fingerprint: {fingerprint}")
+                    auth_err = f"[-] Unknown device! Fingerprint: {fingerprint}"
+                    raise PeerAuthError(auth_err)  # noqa: TRY301
 
             else:
-                raise Exception(
-                    "Peer did not present a certificate. Mutual TLS authentication required."
-                )
+                auth_err = "Peer did not present a certificate. Mutual TLS authentication required."
+                raise PeerAuthError(auth_err)  # noqa: TRY301
 
             if self.is_server:
                 # Server sends first, then waits on answer

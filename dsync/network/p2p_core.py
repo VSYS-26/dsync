@@ -1,3 +1,5 @@
+"""Length-prefixed P2P framing and TLS context helpers."""
+
 import hashlib
 import socket
 import ssl
@@ -48,8 +50,10 @@ def recv_msg(sock: socket.socket | ssl.SSLSocket) -> tuple[int | None, bytes | N
 
 
 def get_public_key_fingerprint(cert_der: bytes) -> str:
-    """Extracts the public key from an .x509 certificate in DER format
-    and calculates an SHA-256 fingerprint from it.
+    """Compute the SHA-256 fingerprint of the public key inside a DER cert.
+
+    Extracts the public key from an X.509 certificate in DER format and
+    calculates an SHA-256 fingerprint from it.
 
     The fingerprint can be used to uniquely identify a certificate or a device
     based on its public key and compare it with a list of trusted keys.
@@ -74,6 +78,7 @@ def get_public_key_fingerprint(cert_der: bytes) -> str:
 
 
 def create_tls_context(is_server: bool, cert_path: str, key_path: str) -> ssl.SSLContext:
+    """Build a mutual-TLS SSL context with hostname checks disabled."""
     purpose = ssl.Purpose.CLIENT_AUTH if is_server else ssl.Purpose.SERVER_AUTH
     context = ssl.create_default_context(purpose)
 
@@ -90,7 +95,7 @@ def create_tls_context(is_server: bool, cert_path: str, key_path: str) -> ssl.SS
         # Verification is done manually from the fingerprint whitelist.
         context.verify_mode = ssl.CERT_OPTIONAL
     else:
-        # Client does not need to verify the server’s certificate via CAs;
+        # Client does not need to verify the server's certificate via CAs;
         # it will manually check the fingerprint after the handshake.
         context.verify_mode = ssl.CERT_NONE
 
