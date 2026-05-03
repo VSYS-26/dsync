@@ -106,8 +106,9 @@ class P2PNode:
 
         Server side receives files until the sender closes the stream and
         writes them under ``RECEIVED_DIR``. Client side sends each file in
-        ``TEST_FILES`` from ``TEST_FILES_DIR`` and signals end-of-transfer
-        with ``writer.write_eof()``.
+        ``TEST_FILES`` from ``TEST_FILES_DIR`` and lets the caller close
+        the writer to signal end-of-transfer (TLS streams do not support
+        ``write_eof``).
 
         Args:
             reader: Authenticated asyncio stream reader from the connection
@@ -132,5 +133,3 @@ class P2PNode:
             for name in TEST_FILES:
                 src = TEST_FILES_DIR / name
                 await send_file(writer, src)
-            writer.write_eof()
-            await writer.drain()
