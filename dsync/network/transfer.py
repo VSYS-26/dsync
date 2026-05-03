@@ -1,0 +1,161 @@
+"""Async file transfer over an authenticated asyncio TLS stream."""
+
+import asyncio
+from dataclasses import dataclass
+from enum import IntEnum
+import hashlib
+from pathlib import Path
+import struct
+
+import yaml
+
+from dsync.integrity import compute_sha256
+
+
+class MsgType(IntEnum):
+    """Frame type identifier carried in the protocol header.
+
+    Higher values are reserved for follow-up tickets (e.g. rsync-style
+    SYNC_HASHES and REQUEST_CHUNKS).
+    """
+
+    FILE_META = 1
+    FILE_CHUNK = 2
+
+
+DEFAULT_CHUNK_SIZE = 64 * 1024
+HEADER = "!BI"
+HEADER_SIZE = struct.calcsize(HEADER)
+
+
+@dataclass(frozen=True)
+class FileMeta:
+    """Metadata announced by the sender before chunk frames arrive.
+
+    Attributes:
+        name: File basename. Used by the receiver to derive the destination
+            path under its target directory.
+        size: Total file size in bytes. Used as the stop condition for the
+            receiver's chunk loop.
+        sha256: Hex SHA-256 digest of the full file. Verified by the
+            receiver after all chunks have been written.
+    """
+
+    name: str
+    size: int
+    sha256: str
+
+    @classmethod
+    def from_yaml(cls, data: bytes) -> "FileMeta":
+        """Parse a YAML-encoded meta payload into a ``FileMeta`` instance."""
+        raw = yaml.safe_load(data.decode("utf-8"))
+        return cls(name=raw["name"], size=raw["size"], sha256=raw["sha256"])
+
+    def to_yaml(self) -> bytes:
+        """Serialize this metadata as a YAML-encoded byte payload."""
+        return yaml.dump(
+            {"name": self.name, "size": self.size, "sha256": self.sha256},
+        ).encode("utf-8")
+
+
+async def _send_frame(writer: asyncio.StreamWriter, msg_type: MsgType, payload: bytes) -> None:
+    """Write one length-prefixed frame to ``writer`` and drain."""
+    writer.write(struct.pack(HEADER, msg_type, len(payload)) + payload)
+    await writer.drain()
+
+
+async def _recv_frame(reader: asyncio.StreamReader) -> tuple[MsgType, bytes]:
+    """Read one length-prefixed frame from ``reader``."""
+    header = await reader.readexactly(HEADER_SIZE)
+    raw_type, length = struct.unpack(HEADER, header)
+    payload = await reader.readexactly(length)
+    return MsgType(raw_type), payload
+
+
+async def send_file(writer: asyncio.StreamWriter, path: Path) -> None:
+    """Send one file over an open asyncio TLS stream in chunks.
+
+    Sends a YAML meta frame (name, size, sha256) followed by raw chunk
+    frames of ``DEFAULT_CHUNK_SIZE`` bytes until the file is exhausted.
+
+    Args:
+        writer: Authenticated asyncio stream from the connection setup.
+        path: Source file to transmit.
+
+    Raises:
+        FileNotFoundError: If ``path`` does not exist or is not a regular file.
+    """
+    if not path.is_file():
+        msg = f"Not a regular file: {path}"
+        raise FileNotFoundError(msg)
+    digest = await asyncio.to_thread(compute_sha256, path)
+    meta = FileMeta(name=path.name, size=path.stat().st_size, sha256=digest)
+    await _send_frame(writer, MsgType.FILE_META, meta.to_yaml())
+
+    with path.open("rb") as f:
+        while chunk := await asyncio.to_thread(f.read, DEFAULT_CHUNK_SIZE):
+            await _send_frame(writer, MsgType.FILE_CHUNK, chunk)
+
+
+async def _recv_and_verify_chunks(
+    reader: asyncio.StreamReader, target: Path, meta: FileMeta
+) -> None:
+    """Read chunk frames into ``target`` and verify against ``meta.sha256``.
+
+    Args:
+        reader: Authenticated asyncio stream from the connection setup.
+        target: Destination file path. Parent directory must exist.
+        meta: Metadata previously read from the peer.
+
+    Raises:
+        ValueError: If a non-chunk frame appears or the SHA-256 digest of
+            the received bytes does not match ``meta.sha256``.
+    """
+    digest = hashlib.sha256()
+    received = 0
+    with target.open("wb") as f:
+        while received < meta.size:
+            msg_type, payload = await _recv_frame(reader)
+            if msg_type != MsgType.FILE_CHUNK:
+                msg = "Unexpected frame during file transfer"
+                raise ValueError(msg)
+            await asyncio.to_thread(f.write, payload)
+            digest.update(payload)
+            received += len(payload)
+
+    if digest.hexdigest() != meta.sha256:
+        msg = "SHA-256 mismatch after transfer"
+        raise ValueError(msg)
+
+
+async def recv_file(reader: asyncio.StreamReader, target_dir: Path) -> Path:
+    """Receive one file announced by a meta frame followed by chunk frames.
+
+    Reads the meta frame, derives the destination path from ``target_dir``
+    and ``meta.name`` (basename only), then receives and verifies the body
+    via ``_recv_and_verify_chunks``. Removes a partial target on any failure.
+
+    Args:
+        reader: Authenticated asyncio stream from the connection setup.
+        target_dir: Destination directory. Must exist.
+
+    Returns:
+        Absolute path of the written file.
+
+    Raises:
+        ValueError: If frames arrive in the wrong order or the SHA-256
+            digest of the received bytes does not match ``meta.sha256``.
+    """
+    msg_type, data = await _recv_frame(reader)
+    if msg_type != MsgType.FILE_META:
+        msg = "Missing file meta frame"
+        raise ValueError(msg)
+    meta = FileMeta.from_yaml(data)
+
+    target = target_dir / Path(meta.name).name
+    try:
+        await _recv_and_verify_chunks(reader, target, meta)
+    except BaseException:
+        target.unlink(missing_ok=True)
+        raise
+    return target
