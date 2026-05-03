@@ -1,0 +1,5 @@
+{
+  "hello": "world",
+  "count": 3,
+  "items": ["alpha", "beta", "gamma"]
+}
