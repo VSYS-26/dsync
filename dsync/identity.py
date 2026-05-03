@@ -1,3 +1,5 @@
+"""Local peer identity and discovered-peer mapping."""
+
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
