@@ -1,18 +1,18 @@
 """P2P node: TLS handshake, mutual auth and sync orchestration."""
 
+import asyncio
+from pathlib import Path
 import socket
-import ssl
 import time
 
-import yaml
-
+from dsync.network.transfer import recv_file, send_file
 from dsync.state import AppState
 
-from .p2p_core import create_tls_context, get_public_key_fingerprint, recv_msg, send_msg
+from .p2p_core import create_tls_context, get_public_key_fingerprint
 
-MSG_SYNC_HASHES = 1
-MSG_REQUEST_CHUNKS = 2
-MSG_CHUNK_DATA = 3
+TEST_FILES = ("hello.txt", "sample.json", "icon.png")
+TEST_FILES_DIR = Path(__file__).resolve().parents[2] / "test-files-to-send"
+RECEIVED_DIR = Path(__file__).resolve().parents[2] / "received-files"
 
 
 class PeerAuthError(Exception):
@@ -97,42 +97,40 @@ class P2PNode:
             return False
         return True
 
-    def start_sync(self, tls_socket: ssl.SSLSocket) -> None:
-        """Starts the data synchronization process over an already established, secure TLS connection.
+    async def start_sync(
+        self,
+        reader: asyncio.StreamReader,
+        writer: asyncio.StreamWriter,
+    ) -> None:
+        """Transfer the configured test files over the authenticated stream.
 
-        The client first sends a list of its existing file hashes.
-        The server receives this list, compares it with its own, and then specifically
-        request the data blocks (chunks) that are still missing.
+        Server side receives files until the sender closes the stream and
+        writes them under ``RECEIVED_DIR``. Client side sends each file in
+        ``TEST_FILES`` from ``TEST_FILES_DIR`` and signals end-of-transfer
+        with ``writer.write_eof()``.
 
         Args:
-            tls_socket (ssl.SSLSocket): The encrypted socket trough which messages are exchanged.
+            reader: Authenticated asyncio stream reader from the connection
+                setup.
+            writer: Authenticated asyncio stream writer from the connection
+                setup.
         """
         if self.is_server:
-            print("[*] Wait on hash list from peer...")
-            msg_type, data = recv_msg(tls_socket)
-            if msg_type == MSG_SYNC_HASHES and data is not None:
-                remote_hashes: dict[str, str] = yaml.safe_load(data.decode("utf-8"))
-                print(f"[*] Received hashes: {remote_hashes}")
-
-                missing = ["chunk_2", "chunk_3"]
-
-                print("[*] Request missing chunks...")
-                request_data: bytes = yaml.dump(missing).encode("utf-8")
-                send_msg(tls_socket, MSG_REQUEST_CHUNKS, request_data)
-
+            RECEIVED_DIR.mkdir(exist_ok=True)
+            # TODO: future ticket — sender adds a folder/file id (from
+            # AppState.folders) to the meta frame. Receiver resolves
+            # id -> destination path via its own AppState.folders. Until
+            # then, every file lands flat in RECEIVED_DIR.
+            while True:
+                try:
+                    await recv_file(reader, RECEIVED_DIR)
+                except asyncio.IncompleteReadError as e:
+                    if e.partial:
+                        raise
+                    break
         else:
-            my_hashes: dict[str, str] = {
-                "chunk_1": "abc...",
-                "chunk_2": "def...",
-                "chunk_3": "ghi...",
-            }
-            print("[*] Send file hashes...")
-            send_msg(tls_socket, MSG_SYNC_HASHES, yaml.dump(my_hashes).encode("utf-8"))
-
-            msg_type, data = recv_msg(tls_socket)
-            if msg_type == MSG_REQUEST_CHUNKS and data is not None:
-                requested_chunks = yaml.safe_load(data.decode("utf-8"))
-                print(f"[*] Peer requests: {requested_chunks}")
-
-        tls_socket.close()
-        print("[+] Sync finished.")
+            for name in TEST_FILES:
+                src = TEST_FILES_DIR / name
+                await send_file(writer, src)
+            writer.write_eof()
+            await writer.drain()
