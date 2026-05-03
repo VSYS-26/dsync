@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import ssl
 import struct
+from typing import Tuple, Optional
 
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization

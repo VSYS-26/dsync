@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import socket
+import asyncio
 from typing import TYPE_CHECKING, Annotated
 
 import typer
@@ -46,21 +46,18 @@ def start_p2p_sync(
     is_server: bool = mode.lower() == "server"
     node = P2PNode(is_server, cert, key, state)
 
-    raw_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
+    host = "0.0.0.0" if is_server else "127.0.0.1"
     # LAN mode
     if is_server:
         info(f"Starting server on port {port}, waiting for connection...")
-        raw_socket.bind(("0.0.0.0", port))  # nosec B104
-        raw_socket.listen(1)
-        raw_socket, _ = raw_socket.accept()
-        success("Client connected.")
+
     else:
         info(f"Connecting to server on 127.0.0.1:{port}...")
-        raw_socket.connect(("127.0.0.1", port))
-        success("Connected to server.")
 
-    transfer_completed = node.handle_secure_connection(raw_socket)
-
-    if transfer_completed:
-        success("Data transfer completed.")
+    try:
+        asyncio.run(node.start(host, port))
+        success("Data transfer completed or connection closed.")
+    except KeyboardInterrupt:
+        info("\nShutting down...")
+    except Exception as e:
+        info(f"\n[!] Sync stopped: {e}")
