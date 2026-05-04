@@ -4,7 +4,6 @@ import asyncio
 import hashlib
 import ssl
 import struct
-from typing import Tuple, Optional
 
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
@@ -20,7 +19,7 @@ async def async_send_msg(writer: asyncio.StreamWriter, msg_type: int, data: byte
     await writer.drain()
 
 
-async def async_recv_msg(reader: asyncio.StreamReader) -> Tuple[Optional[int], Optional[bytes]]:
+async def async_recv_msg(reader: asyncio.StreamReader) -> tuple[int | None, bytes | None]:
     """
     Receives a message exactly based on its length.
     """

@@ -2,6 +2,7 @@
 
 import asyncio
 import ssl
+from typing import Any
 
 from cryptography import x509
 from cryptography.hazmat.primitives.serialization import Encoding
@@ -28,7 +29,6 @@ class P2PNode:
         cert_path: str,
         key_path: str,
         state: AppState,
-        trusted_cert_paths: list[str] | None = None,
     ) -> None:
         """Initializes a new P2P node.
 
@@ -58,7 +58,10 @@ class P2PNode:
         # Show error messages
         loop = asyncio.get_running_loop()
 
-        def custom_exception_handler(loop, context):
+        def custom_exception_handler(
+            _loop: asyncio.AbstractEventLoop, context: dict[str, Any]
+        ) -> None:
+            """Print TLS handshake and background errors raised inside the event loop."""
             exc = context.get("exception")
             if isinstance(exc, ssl.SSLError):
                 print(f"\n[!] TLS Handshake failed: {exc.reason} ({exc})")
@@ -105,7 +108,7 @@ class P2PNode:
             # Receive peer's certificate
             _, peer_cert_pem = await async_recv_msg(reader)
             if peer_cert_pem is None:
-                raise PeerAuthError("Peer sent no certification")
+                raise PeerAuthError("Peer sent no certificate")
 
             # PEM -> DER for fingerprint calculation
             cert = x509.load_pem_x509_certificate(peer_cert_pem)
@@ -121,7 +124,6 @@ class P2PNode:
             if self.is_server:
                 print("[DEBUG] Server sending hello...")
                 await async_send_msg(writer, 1, b"Hello from server. Data sync can start.")
-                await writer.drain()
                 print("[DEBUG] Server waiting for client reply...")
                 _, answer = await async_recv_msg(reader)
                 if answer is None:
@@ -135,7 +137,6 @@ class P2PNode:
                 print(f"[*] Message from server: {msg.decode('utf-8')}")
                 print("[DEBUG] Client sending reply...")
                 await async_send_msg(writer, 1, b"Hello from client. I'm ready.")
-                await writer.drain()
 
             await self.start_sync(reader, writer)
 
