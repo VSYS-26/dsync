@@ -1,4 +1,4 @@
-"""CLI commands for sync operations."""
+"""CLI command to start peer-to-peer data synchronization."""
 
 from __future__ import annotations
 
@@ -13,10 +13,7 @@ from dsync.network.node import P2PNode
 if TYPE_CHECKING:
     from dsync.state import AppState
 
-app: typer.Typer = typer.Typer()
 
-
-@app.command("start")
 def start_p2p_sync(
     ctx: typer.Context,
     mode: Annotated[str, typer.Option(help="'server' (waits) or 'client' (connects)")] = "client",
