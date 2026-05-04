@@ -29,7 +29,7 @@ async def async_recv_msg(reader: asyncio.StreamReader) -> Tuple[Optional[int], O
     except asyncio.IncompleteReadError:
         return None, None
     
-    msg_type, length = struct.update("!BI", header)
+    msg_type, length = struct.unpack("!BI", header)
 
     try:
         data = await reader.readexactly(length)
@@ -74,19 +74,17 @@ def create_tls_context(is_server: bool, cert_path: str, key_path: str) -> ssl.SS
 
     context.load_cert_chain(certfile=cert_path, keyfile=key_path)
 
-    # Für Testzwecke gedacht
-    context.load_verify_locations(cafile=cert_path)
-
     # Disable hostname checks (irrelevant for P2P)
     context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE # No CA check -> fingerprint handles that
 
-    if is_server:
-        # Request client certificate, but do not enforce CA verification.
-        # Verification is done manually from the fingerprint whitelist.
-        context.verify_mode = ssl.CERT_OPTIONAL
-    else:
-        # Client does not need to verify the server's certificate via CAs;
-        # it will manually check the fingerprint after the handshake.
-        context.verify_mode = ssl.CERT_NONE
+    # if is_server:
+    #     # Request client certificate, but do not enforce CA verification.
+    #     # Verification is done manually from the fingerprint whitelist.
+    #     context.verify_mode = ssl.CERT_OPTIONAL
+    # else:
+    #     # Client does not need to verify the server's certificate via CAs;
+    #     # it will manually check the fingerprint after the handshake.
+    #     context.verify_mode = ssl.CERT_NONE
 
     return context

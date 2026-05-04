@@ -69,7 +69,7 @@ async def main():
     """Run both peers concurrently in the same asyncio event loop."""
     await asyncio.gather(
         start_server_peer(),
-        start_client_peer
+        start_client_peer()
     )
 
 

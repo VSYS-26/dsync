@@ -1,12 +1,10 @@
 """P2P node: TLS handshake, mutual auth and sync orchestration."""
 
 import asyncio
-import socket
 import ssl
-import time
 
-import yaml
-
+from cryptography import x509
+from cryptography.hazmat.primitives.serialization import Encoding
 from dsync.state import AppState
 
 from .p2p_core import create_tls_context, get_public_key_fingerprint, async_recv_msg, async_send_msg
@@ -24,7 +22,7 @@ class P2PNode:
     and handling the actual data synchronization process.
     """
 
-    def __init__(self, is_server: bool, cert_path: str, key_path: str, state: AppState) -> None:
+    def __init__(self, is_server: bool, cert_path: str, key_path: str, state: AppState, trusted_cert_paths: list[str] | None = None) -> None:
         """Initializes a new P2P node.
 
         Args:
@@ -43,12 +41,23 @@ class P2PNode:
             device.fingerprint: device.id for device in self.state.devices.trusted_devices
         }
 
+
     async def start(self, host:str, port: int) -> None:
         """Starts the node as an async server or connects as an async client.
         
         This handles the initial network connection and automatically wraps it in TLS
         using the provided certificates.
         """
+
+        # Show error messages
+        loop = asyncio.get_running_loop()
+        def custom_exception_handler(loop, context):
+            exc = context.get('exception')
+            if isinstance(exc, ssl.SSLError):
+                print(f"\n[!] TLS Handshake failed: {exc.reason} ({exc})")
+            else:
+                print(f"\n[!] Background error: {context.get('message')}")
+        loop.set_exception_handler(custom_exception_handler)
 
         context = create_tls_context(self.is_server, self.cert_path, self.key_path)
 
@@ -75,36 +84,49 @@ class P2PNode:
         fingerprint is not in the `trusted_devices` list. After successful check, a brief "Hello" 
         handshake is performed.
         """
-        context = create_tls_context(self.is_server, self.cert_path, self.key_path)
-
         try:
             # Mutual TLS Check: Who is on the other end?
-            ssl_object = writer.get_extra_info('ssl_object')
-            peer_cert: bytes | None = ssl_object.getpeercert(binary_form=True) if ssl_object else None
+            # ssl_object = writer.get_extra_info('ssl_object')
+            # peer_cert: bytes | None = ssl_object.getpeercert(binary_form=True) if ssl_object else None
 
-            if peer_cert:
-                fingerprint: str = get_public_key_fingerprint(peer_cert)
+            # Send own certificate to peer
+            with open(self.cert_path, "rb") as f:
+                own_cert_pem = f.read()
+            await async_send_msg(writer, 0, own_cert_pem)
 
-                if fingerprint in self.trusted_devices:
-                    print(f"[+] Verified: {self.trusted_devices[fingerprint]}")
-                else:
-                    auth_err = f"[-] Unknown device! Fingerprint: {fingerprint}"
-                    raise PeerAuthError(auth_err)
+            # Receive peer's certificate
+            _, peer_cert_pem = await async_recv_msg(reader)
+            if peer_cert_pem is None:
+                raise PeerAuthError("Peer sent no certification")
 
-            else:
-                auth_err = "Peer did not present a certificate. Mutual TLS authentication required."
-                raise PeerAuthError(auth_err)
+            # PEM -> DER for fingerprint calculation
+            cert = x509.load_pem_x509_certificate(peer_cert_pem)
+            peer_cert_der = cert.public_bytes(Encoding.DER)
+
+            fingerprint = get_public_key_fingerprint(peer_cert_der)
+            if fingerprint not in self.trusted_devices:
+                raise PeerAuthError(f"[-] Unknown device! Fingerprint: {fingerprint}")
+            
+            print(f"[+] Verified: {self.trusted_devices[fingerprint]}")
 
             # Handshake
             if self.is_server:
-                writer.write(b"Hello from server. Data sync can start.")
+                print("[DEBUG] Server sending hello...")
+                await async_send_msg(writer, 1, b"Hello from server. Data sync can start.")
                 await writer.drain()
-                answer = await reader.read(1024)
+                print("[DEBUG] Server waiting for client reply...")
+                _, answer = await async_recv_msg(reader)
+                if answer is None:
+                    raise PeerAuthError("Client closed connection before handshake reply.")
                 print(f"[*] Message from client: {answer.decode('utf-8')}")
             else:
-                msg = await reader.read(1024)
+                print("[DEBUG] Client waiting for hello...")
+                _, msg = await async_recv_msg(reader)
+                if msg is None:
+                    raise PeerAuthError("Server closed connection before handshake greeting.")
                 print(f"[*] Message from server: {msg.decode('utf-8')}")
-                writer.write(b"Hello from client. I'm ready.")
+                print("[DEBUG] Client sending reply...")
+                await async_send_msg(writer, 1, b"Hello from client. I'm ready.")
                 await writer.drain()
 
             await self.start_sync(reader, writer)
