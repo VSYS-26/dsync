@@ -41,6 +41,7 @@ def generate_self_signed_cert(cert_name: str = "cert.pem", key_name: str = "key.
             # Valid 10 years
             datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=3650)
         )
+        .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
         .sign(private_key, hashes.SHA256())
     )
 

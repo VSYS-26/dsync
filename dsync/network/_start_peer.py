@@ -15,17 +15,15 @@ Prerequisites:
       fingerprints of the corresponding certificates.
 """
 
+import asyncio
 from pathlib import Path
-import socket
-import threading
-import time
 
 from dsync.config import DevicesConfig, FoldersConfig, TrustedDevice
 from dsync.network.node import P2PNode
 from dsync.state import AppState
 
-PEER_A_FINGERPRINT = "ADD_FINGERPRINT_FROM_PEER_A"
-PEER_B_FINGERPRINT = "ADD_FINGERPRINT_FROM_PEER_B"
+PEER_A_FINGERPRINT = "PEER_A_FINGERPRINT"
+PEER_B_FINGERPRINT = "PEER_B_FINGERPRINT"
 
 HOST = "127.0.0.1"
 PORT = 9999
@@ -42,7 +40,7 @@ def _build_demo_state() -> AppState:
     return AppState(config_dir=Path(), folders=FoldersConfig(), devices=devices)
 
 
-def start_server_peer() -> None:
+async def start_server_peer() -> None:
     """Start the server peer, listen on ``127.0.0.1:9999``, and accept one client."""
     node = P2PNode(
         is_server=True,
@@ -50,39 +48,30 @@ def start_server_peer() -> None:
         key_path="peer_a_key.pem",
         state=_build_demo_state(),
     )
-
-    server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    server_sock.bind((HOST, PORT))
-    server_sock.listen(1)
-    print("Peer A waits on connections...")
-
-    raw_socket, _ = server_sock.accept()
-    node.handle_secure_connection(raw_socket)
+    print("Peer A (Server) is starting...")
+    await node.start(HOST, PORT)
 
 
-def start_client_peer() -> None:
+async def start_client_peer() -> None:
     """Start the client peer and connect to the server on ``127.0.0.1:9999``."""
-    time.sleep(1)
+    await asyncio.sleep(1)
     node = P2PNode(
         is_server=False,
         cert_path="peer_b_cert.pem",
         key_path="peer_b_key.pem",
         state=_build_demo_state(),
     )
+    print("Peer B (client) is connecting...")
+    await node.start(HOST, PORT)
 
-    raw_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    raw_socket.connect((HOST, PORT))
 
-    node.handle_secure_connection(raw_socket)
+async def main():
+    """Run both peers concurrently in the same asyncio event loop."""
+    await asyncio.gather(start_server_peer(), start_client_peer())
 
 
 if __name__ == "__main__":
-    t1 = threading.Thread(target=start_server_peer)
-    t2 = threading.Thread(target=start_client_peer)
-
-    t1.start()
-    t2.start()
-
-    t1.join()
-    t2.join()
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\nDemo shut down by user.")
