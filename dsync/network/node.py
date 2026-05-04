@@ -193,7 +193,10 @@ class P2PNode:
                 raise PeerAuthError("Peer cert must use RSA key")
             self._verify_peer_signature(peer_public_key, channel_binding, peer_sig)
 
-            print(f"[+] Verified: {self.trusted_devices[fingerprint]}")
+            peer_id = self.trusted_devices[fingerprint]
+            if "/" in peer_id or "\\" in peer_id or peer_id in {".", ".."}:
+                raise PeerAuthError(f"Refusing path-unsafe peer id: {peer_id!r}")
+            print(f"[+] Verified: {peer_id}")
 
             # Handshake
             if self.is_server:
@@ -223,7 +226,7 @@ class P2PNode:
                 print("[DEBUG] Client sending reply...")
                 await async_send_msg(writer, MsgType.HELLO, b"Hello from client. I'm ready.")
 
-            await self.start_sync(reader, writer)
+            await self.start_sync(reader, writer, peer_id)
 
         except Exception as e:
             print(f"[!] Connection error: {e}")
@@ -235,11 +238,12 @@ class P2PNode:
         self,
         reader: asyncio.StreamReader,
         writer: asyncio.StreamWriter,
+        peer_id: str,
     ) -> None:
         """Transfer the configured test files over the authenticated stream.
 
-        Server side receives files until the sender closes the stream and
-        writes them under ``RECEIVED_DIR``. Client side sends each file in
+        Server side receives files into ``RECEIVED_DIR/<peer_id>/<filename>`` until the
+        sender closes the stream. Client side sends each file in
         ``TEST_FILES`` from ``TEST_FILES_DIR`` and lets the caller close
         the writer to signal end-of-transfer (TLS streams do not support
         ``write_eof``).
@@ -249,16 +253,19 @@ class P2PNode:
                 setup.
             writer: Authenticated asyncio stream writer from the connection
                 setup.
+            peer_id: Verified trusted-device id of the remote peer. Used as
+                the per-client subdirectory name on the server side.
         """
         if self.is_server:
-            RECEIVED_DIR.mkdir(exist_ok=True)
+            peer_dir = RECEIVED_DIR / peer_id
+            peer_dir.mkdir(parents=True, exist_ok=True)
             # TODO: future ticket — sender adds a folder/file id (from
             # AppState.folders) to the meta frame. Receiver resolves
             # id -> destination path via its own AppState.folders. Until
-            # then, every file lands flat in RECEIVED_DIR.
+            # then, every file lands flat in RECEIVED_DIR/<peer_id>.
             while True:
                 try:
-                    await recv_file(reader, RECEIVED_DIR)
+                    await recv_file(reader, peer_dir)
                 except asyncio.IncompleteReadError as e:
                     if e.partial:
                         raise
