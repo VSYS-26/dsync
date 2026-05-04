@@ -1,15 +1,34 @@
 """P2P node: TLS handshake, mutual auth and sync orchestration."""
 
 import asyncio
+import hashlib
 from pathlib import Path
-import socket
-import time
+import ssl
+from typing import Any
+
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey, RSAPublicKey
+from cryptography.hazmat.primitives.serialization import (
+    Encoding,
+    PublicFormat,
+    load_der_public_key,
+    load_pem_private_key,
+)
 
 from dsync.network.transfer import recv_file, send_file
 from dsync.state import AppState
 
-from .p2p_core import create_tls_context, get_public_key_fingerprint
+from .p2p_core import (
+    async_recv_auth_msg,
+    async_recv_msg,
+    async_send_msg,
+    create_tls_context,
+    get_tls_channel_binding,
+)
 
+_SPKI_SIZE = 294  # RSA-2048 SubjectPublicKeyInfo DER
+_SIG_SIZE = 256  # RSA-2048 PSS signature
 TEST_FILES = ("hello.txt", "sample.json", "icon.png")
 TEST_FILES_DIR = Path(__file__).resolve().parents[2] / "test-files-to-send"
 RECEIVED_DIR = Path(__file__).resolve().parents[2] / "received-files"
@@ -27,7 +46,13 @@ class P2PNode:
     and handling the actual data synchronization process.
     """
 
-    def __init__(self, is_server: bool, cert_path: str, key_path: str, state: AppState) -> None:
+    def __init__(
+        self,
+        is_server: bool,
+        cert_path: str,
+        key_path: str,
+        state: AppState,
+    ) -> None:
         """Initializes a new P2P node.
 
         Args:
@@ -46,56 +71,157 @@ class P2PNode:
             device.fingerprint: device.id for device in self.state.devices.trusted_devices
         }
 
-    def handle_secure_connection(self, raw_socket: socket.socket) -> bool:
-        """Wrap ``raw_socket`` in TLS, authenticate the peer and run a hello handshake.
+        with Path(self.key_path).open("rb") as f:
+            raw_key = load_pem_private_key(f.read(), password=None)
+        if not isinstance(raw_key, RSAPrivateKey):
+            raise TypeError("Only RSA private keys are supported for peer auth")
+        if raw_key.key_size != 2048:
+            raise TypeError(f"Only RSA-2048 keys are supported, got RSA-{raw_key.key_size}")
+        self._own_private_key: RSAPrivateKey = raw_key
+        self._own_spki: bytes = raw_key.public_key().public_bytes(
+            Encoding.DER, PublicFormat.SubjectPublicKeyInfo
+        )
 
-        The partner is rejected if they do not present a certificate or if their certificate
-        fingerprint is not in the `trusted_devices` list. After successful check, a brief "Hello"
-        handshake is performed.
+    async def start(self, host: str, port: int) -> None:
+        """Starts the node as an async server or connects as an async client.
 
-        Args:
-            raw_socket (socket.socket): The initial, unencrypted network connection.
+        This handles the initial network connection and automatically wraps it in TLS
+        using the provided certificates.
         """
+        # Show error messages
+        loop = asyncio.get_running_loop()
+
+        def custom_exception_handler(
+            _loop: asyncio.AbstractEventLoop, context: dict[str, Any]
+        ) -> None:
+            """Print TLS handshake and background errors raised inside the event loop."""
+            exc = context.get("exception")
+            if isinstance(exc, ssl.SSLError):
+                print(f"\n[!] TLS Handshake failed: {exc.reason} ({exc})")
+            else:
+                print(f"\n[!] Background error: {context.get('message')}")
+
+        loop.set_exception_handler(custom_exception_handler)
+
         context = create_tls_context(self.is_server, self.cert_path, self.key_path)
 
+        if self.is_server:
+            server = await asyncio.start_server(
+                self.handle_secure_connection, host, port, ssl=context
+            )
+            print(f"[*] Server listens asynchroniously on {host}:{port}")
+            async with server:
+                await server.serve_forever()
+        else:
+            try:
+                reader, writer = await asyncio.open_connection(host, port, ssl=context)
+                await self.handle_secure_connection(reader, writer)
+            except Exception as e:
+                print(f"[!] Connection error: {e}")
+
+    def _sign_channel_binding(self, channel_binding: bytes) -> bytes:
+        """Sign the TLS channel binding with own RSA private key (PSS/SHA-256)."""
+        return self._own_private_key.sign(
+            channel_binding,
+            padding.PSS(
+                mgf=padding.MGF1(hashes.SHA256()),
+                salt_length=padding.PSS.MAX_LENGTH,
+            ),
+            hashes.SHA256(),
+        )
+
+    @staticmethod
+    def _verify_peer_signature(
+        public_key: RSAPublicKey, channel_binding: bytes, signature: bytes
+    ) -> None:
+        """Raise ValueError if signature does not verify against channel_binding."""
         try:
-            # TLS Wrap
-            tls_socket = context.wrap_socket(raw_socket, server_side=self.is_server)
-            # Mutual TLS Check: Who is on the other end?
-            peer_cert: bytes | None = tls_socket.getpeercert(binary_form=True)
+            public_key.verify(
+                signature,
+                channel_binding,
+                padding.PSS(
+                    mgf=padding.MGF1(hashes.SHA256()),
+                    salt_length=padding.PSS.MAX_LENGTH,
+                ),
+                hashes.SHA256(),
+            )
+        except Exception as exc:
+            raise ValueError(f"Peer signature invalid: {exc}") from exc
 
-            if peer_cert:
-                fingerprint: str = get_public_key_fingerprint(peer_cert)
+    @staticmethod
+    def _pack_auth_msg(spki: bytes, signature: bytes) -> bytes:
+        """Pack SPKI + signature into a fixed-size payload: [294B spki][256B sig]."""
+        return spki + signature
 
-                if fingerprint in self.trusted_devices:
-                    print(f"[+] Verified: {self.trusted_devices[fingerprint]}")
-                else:
-                    auth_err = f"[-] Unknown device! Fingerprint: {fingerprint}"
-                    raise PeerAuthError(auth_err)  # noqa: TRY301
+    @staticmethod
+    def _unpack_auth_msg(payload: bytes) -> tuple[bytes, bytes]:
+        """Unpack fixed-size payload into (spki, signature)."""
+        return payload[:_SPKI_SIZE], payload[_SPKI_SIZE:]
 
-            else:
-                auth_err = "Peer did not present a certificate. Mutual TLS authentication required."
-                raise PeerAuthError(auth_err)  # noqa: TRY301
+    async def handle_secure_connection(
+        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+    ) -> None:
+        """Authenticate the peer and run a hello handshake over the secure streams.
 
+        Authentication is MITM-resistant via TLS channel binding:
+          1. Derive 32-byte channel binding from the live TLS session
+             (export_keying_material — unique per connection, bound to TLS master secret).
+          2. Sign the channel binding with own RSA private key.
+          3. Send own cert + signature atomically; receive peer's cert + signature.
+          4. Verify peer fingerprint against trusted list.
+          5. Verify peer's signature over *this* channel binding using peer's public key.
+
+        An active MITM has different channel bindings for each of its two tunnels.
+        It cannot forge a valid signature over the victim-side channel binding without
+        the victim's private key, so step 5 fails.
+        """
+        try:
+            channel_binding = get_tls_channel_binding(writer)
+            own_sig = self._sign_channel_binding(channel_binding)
+            auth_payload = self._pack_auth_msg(self._own_spki, own_sig)
+
+            await async_send_msg(writer, 0, auth_payload)
+
+            peer_payload = await async_recv_auth_msg(reader)
+
+            peer_spki, peer_sig = self._unpack_auth_msg(peer_payload)
+
+            fingerprint = hashlib.sha256(peer_spki).hexdigest()
+            if fingerprint not in self.trusted_devices:
+                raise PeerAuthError(f"[-] Unknown device! Fingerprint: {fingerprint}")
+
+            peer_public_key = load_der_public_key(peer_spki)
+            if not isinstance(peer_public_key, RSAPublicKey):
+                raise PeerAuthError("Peer cert must use RSA key")
+            self._verify_peer_signature(peer_public_key, channel_binding, peer_sig)
+
+            print(f"[+] Verified: {self.trusted_devices[fingerprint]}")
+
+            # Handshake
             if self.is_server:
-                # Server sends first, then waits on answer
-                tls_socket.sendall(b"Hello from server. Data sync can start.")
-                answer = tls_socket.recv(1024)
+                print("[DEBUG] Server sending hello...")
+                await async_send_msg(writer, 1, b"Hello from server. Data sync can start.")
+                print("[DEBUG] Server waiting for client reply...")
+                _, answer = await async_recv_msg(reader)
+                if answer is None:
+                    raise PeerAuthError("Client closed connection before handshake reply.")
                 print(f"[*] Message from client: {answer.decode('utf-8')}")
             else:
-                # Client waits on message, then sends answer
-                msg = tls_socket.recv(1024)
+                print("[DEBUG] Client waiting for hello...")
+                _, msg = await async_recv_msg(reader)
+                if msg is None:
+                    raise PeerAuthError("Server closed connection before handshake greeting.")
                 print(f"[*] Message from server: {msg.decode('utf-8')}")
-                tls_socket.sendall(b"Hello from client. I'm ready.")
+                print("[DEBUG] Client sending reply...")
+                await async_send_msg(writer, 1, b"Hello from client. I'm ready.")
 
-            time.sleep(1)
-            self.start_sync(tls_socket)
+            await self.start_sync(reader, writer)
 
         except Exception as e:
             print(f"[!] Connection error: {e}")
-            raw_socket.close()
-            return False
-        return True
+        finally:
+            writer.close()
+            await writer.wait_closed()
 
     async def start_sync(
         self,
