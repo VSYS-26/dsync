@@ -1,14 +1,31 @@
 """P2P node: TLS handshake, mutual auth and sync orchestration."""
 
 import asyncio
+import hashlib
 import ssl
 from typing import Any
 
-from cryptography import x509
-from cryptography.hazmat.primitives.serialization import Encoding
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey, RSAPublicKey
+from cryptography.hazmat.primitives.serialization import (
+    Encoding,
+    PublicFormat,
+    load_der_public_key,
+    load_pem_private_key,
+)
 from dsync.state import AppState
 
-from .p2p_core import create_tls_context, get_public_key_fingerprint, async_recv_msg, async_send_msg
+from .p2p_core import (
+    async_recv_auth_msg,
+    async_recv_msg,
+    async_send_msg,
+    create_tls_context,
+    get_tls_channel_binding,
+)
+
+_SPKI_SIZE = 294  # RSA-2048 SubjectPublicKeyInfo DER
+_SIG_SIZE = 256   # RSA-2048 PSS signature
 
 
 class PeerAuthError(Exception):
@@ -48,6 +65,15 @@ class P2PNode:
             device.fingerprint: device.id for device in self.state.devices.trusted_devices
         }
 
+        with open(self.key_path, "rb") as f:
+            raw_key = load_pem_private_key(f.read(), password=None)
+        if not isinstance(raw_key, RSAPrivateKey):
+            raise TypeError("Only RSA private keys are supported for peer auth")
+        if raw_key.key_size != 2048:
+            raise TypeError(f"Only RSA-2048 keys are supported, got RSA-{raw_key.key_size}")
+        self._own_private_key: RSAPrivateKey = raw_key
+        self._own_spki: bytes = raw_key.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)
+
     async def start(self, host: str, port: int) -> None:
         """Starts the node as an async server or connects as an async client.
 
@@ -86,37 +112,81 @@ class P2PNode:
             except Exception as e:
                 print(f"[!] Connection error: {e}")
 
+    def _sign_channel_binding(self, channel_binding: bytes) -> bytes:
+        """Sign the TLS channel binding with own RSA private key (PSS/SHA-256)."""
+        return self._own_private_key.sign(
+            channel_binding,
+            padding.PSS(
+                mgf=padding.MGF1(hashes.SHA256()),
+                salt_length=padding.PSS.MAX_LENGTH,
+            ),
+            hashes.SHA256(),
+        )
+
+    @staticmethod
+    def _verify_peer_signature(
+        public_key: RSAPublicKey, channel_binding: bytes, signature: bytes
+    ) -> None:
+        """Raise ValueError if signature does not verify against channel_binding."""
+        try:
+            public_key.verify(
+                signature,
+                channel_binding,
+                padding.PSS(
+                    mgf=padding.MGF1(hashes.SHA256()),
+                    salt_length=padding.PSS.MAX_LENGTH,
+                ),
+                hashes.SHA256(),
+            )
+        except Exception as exc:
+            raise ValueError(f"Peer signature invalid: {exc}") from exc
+
+    @staticmethod
+    def _pack_auth_msg(spki: bytes, signature: bytes) -> bytes:
+        """Pack SPKI + signature into a fixed-size payload: [294B spki][256B sig]."""
+        return spki + signature
+
+    @staticmethod
+    def _unpack_auth_msg(payload: bytes) -> tuple[bytes, bytes]:
+        """Unpack fixed-size payload into (spki, signature)."""
+        return payload[:_SPKI_SIZE], payload[_SPKI_SIZE:]
+
     async def handle_secure_connection(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ) -> None:
         """Authenticate the peer and run a hello handshake over the secure streams.
 
-        The partner is rejected if they do not present a certificate or if their certificate
-        fingerprint is not in the `trusted_devices` list. After successful check, a brief "Hello"
-        handshake is performed.
+        Authentication is MITM-resistant via TLS channel binding:
+          1. Derive 32-byte channel binding from the live TLS session
+             (export_keying_material — unique per connection, bound to TLS master secret).
+          2. Sign the channel binding with own RSA private key.
+          3. Send own cert + signature atomically; receive peer's cert + signature.
+          4. Verify peer fingerprint against trusted list.
+          5. Verify peer's signature over *this* channel binding using peer's public key.
+
+        An active MITM has different channel bindings for each of its two tunnels.
+        It cannot forge a valid signature over the victim-side channel binding without
+        the victim's private key, so step 5 fails.
         """
         try:
-            # Mutual TLS Check: Who is on the other end?
-            # ssl_object = writer.get_extra_info('ssl_object')
-            # peer_cert: bytes | None = ssl_object.getpeercert(binary_form=True) if ssl_object else None
+            channel_binding = get_tls_channel_binding(writer)
+            own_sig = self._sign_channel_binding(channel_binding)
+            auth_payload = self._pack_auth_msg(self._own_spki, own_sig)
 
-            # Send own certificate to peer
-            with open(self.cert_path, "rb") as f:
-                own_cert_pem = f.read()
-            await async_send_msg(writer, 0, own_cert_pem)
+            await async_send_msg(writer, 0, auth_payload)
 
-            # Receive peer's certificate
-            _, peer_cert_pem = await async_recv_msg(reader)
-            if peer_cert_pem is None:
-                raise PeerAuthError("Peer sent no certificate")
+            peer_payload = await async_recv_auth_msg(reader)
 
-            # PEM -> DER for fingerprint calculation
-            cert = x509.load_pem_x509_certificate(peer_cert_pem)
-            peer_cert_der = cert.public_bytes(Encoding.DER)
+            peer_spki, peer_sig = self._unpack_auth_msg(peer_payload)
 
-            fingerprint = get_public_key_fingerprint(peer_cert_der)
+            fingerprint = hashlib.sha256(peer_spki).hexdigest()
             if fingerprint not in self.trusted_devices:
                 raise PeerAuthError(f"[-] Unknown device! Fingerprint: {fingerprint}")
+
+            peer_public_key = load_der_public_key(peer_spki)
+            if not isinstance(peer_public_key, RSAPublicKey):
+                raise PeerAuthError("Peer cert must use RSA key")
+            self._verify_peer_signature(peer_public_key, channel_binding, peer_sig)
 
             print(f"[+] Verified: {self.trusted_devices[fingerprint]}")
 
