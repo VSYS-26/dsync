@@ -67,10 +67,7 @@ async def start_client_peer() -> None:
 
 async def main():
     """Run both peers concurrently in the same asyncio event loop."""
-    await asyncio.gather(
-        start_server_peer(),
-        start_client_peer()
-    )
+    await asyncio.gather(start_server_peer(), start_client_peer())
 
 
 if __name__ == "__main__":

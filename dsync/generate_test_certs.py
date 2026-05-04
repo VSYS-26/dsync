@@ -1,9 +1,10 @@
 """Generate fingerprints for demo."""
+
 import sys
 import os
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.abspath(os.path.join(current_dir, '..'))
+parent_dir = os.path.abspath(os.path.join(current_dir, ".."))
 sys.path.insert(0, parent_dir)
 
 from dsync.crypto.setup_certs import generate_self_signed_cert

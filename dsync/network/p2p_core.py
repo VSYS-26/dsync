@@ -11,9 +11,9 @@ from cryptography.hazmat.primitives import serialization
 
 
 async def async_send_msg(writer: asyncio.StreamWriter, msg_type: int, data: bytes) -> None:
-    '''
+    """
     Sends a message with a length prefix and type.
-    '''
+    """
     # ! = Network Byte Order, B = unsigned char, I = unsigned int
     header = struct.pack("!BI", msg_type, len(data))
     writer.write(header + data)
@@ -21,21 +21,21 @@ async def async_send_msg(writer: asyncio.StreamWriter, msg_type: int, data: byte
 
 
 async def async_recv_msg(reader: asyncio.StreamReader) -> Tuple[Optional[int], Optional[bytes]]:
-    '''
+    """
     Receives a message exactly based on its length.
-    '''
+    """
     try:
         header = await reader.readexactly(5)
     except asyncio.IncompleteReadError:
         return None, None
-    
+
     msg_type, length = struct.unpack("!BI", header)
 
     try:
         data = await reader.readexactly(length)
     except asyncio.IncompleteReadError:
         raise RuntimeError("Connection lost during reception.")
-          
+
     return msg_type, data
 
 
@@ -76,7 +76,7 @@ def create_tls_context(is_server: bool, cert_path: str, key_path: str) -> ssl.SS
 
     # Disable hostname checks (irrelevant for P2P)
     context.check_hostname = False
-    context.verify_mode = ssl.CERT_NONE # No CA check -> fingerprint handles that
+    context.verify_mode = ssl.CERT_NONE  # No CA check -> fingerprint handles that
 
     # if is_server:
     #     # Request client certificate, but do not enforce CA verification.

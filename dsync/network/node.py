@@ -22,7 +22,14 @@ class P2PNode:
     and handling the actual data synchronization process.
     """
 
-    def __init__(self, is_server: bool, cert_path: str, key_path: str, state: AppState, trusted_cert_paths: list[str] | None = None) -> None:
+    def __init__(
+        self,
+        is_server: bool,
+        cert_path: str,
+        key_path: str,
+        state: AppState,
+        trusted_cert_paths: list[str] | None = None,
+    ) -> None:
         """Initializes a new P2P node.
 
         Args:
@@ -41,22 +48,23 @@ class P2PNode:
             device.fingerprint: device.id for device in self.state.devices.trusted_devices
         }
 
-
-    async def start(self, host:str, port: int) -> None:
+    async def start(self, host: str, port: int) -> None:
         """Starts the node as an async server or connects as an async client.
-        
+
         This handles the initial network connection and automatically wraps it in TLS
         using the provided certificates.
         """
 
         # Show error messages
         loop = asyncio.get_running_loop()
+
         def custom_exception_handler(loop, context):
-            exc = context.get('exception')
+            exc = context.get("exception")
             if isinstance(exc, ssl.SSLError):
                 print(f"\n[!] TLS Handshake failed: {exc.reason} ({exc})")
             else:
                 print(f"\n[!] Background error: {context.get('message')}")
+
         loop.set_exception_handler(custom_exception_handler)
 
         context = create_tls_context(self.is_server, self.cert_path, self.key_path)
@@ -70,18 +78,18 @@ class P2PNode:
                 await server.serve_forever()
         else:
             try:
-                reader, writer = await asyncio.open_connection(
-                    host, port, ssl=context
-                )
+                reader, writer = await asyncio.open_connection(host, port, ssl=context)
                 await self.handle_secure_connection(reader, writer)
             except Exception as e:
                 print(f"[!] Connection error: {e}")
 
-    async def handle_secure_connection(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+    async def handle_secure_connection(
+        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+    ) -> None:
         """Authenticate the peer and run a hello handshake over the secure streams.
-        
+
         The partner is rejected if they do not present a certificate or if their certificate
-        fingerprint is not in the `trusted_devices` list. After successful check, a brief "Hello" 
+        fingerprint is not in the `trusted_devices` list. After successful check, a brief "Hello"
         handshake is performed.
         """
         try:
@@ -106,7 +114,7 @@ class P2PNode:
             fingerprint = get_public_key_fingerprint(peer_cert_der)
             if fingerprint not in self.trusted_devices:
                 raise PeerAuthError(f"[-] Unknown device! Fingerprint: {fingerprint}")
-            
+
             print(f"[+] Verified: {self.trusted_devices[fingerprint]}")
 
             # Handshake
@@ -139,7 +147,7 @@ class P2PNode:
 
     async def start_sync(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         """Starts the data synchronization process.
-        
+
         Placeholder.
         """
         pass
