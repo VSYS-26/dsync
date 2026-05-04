@@ -1,6 +1,7 @@
 """Length-prefixed P2P framing and TLS context helpers."""
 
 import asyncio
+from enum import IntEnum
 import hashlib
 import ssl
 import struct
@@ -8,11 +9,27 @@ import struct
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
 
+# RSA-2048 SubjectPublicKeyInfo DER (294 B) + RSA-2048 PSS signature (256 B)
+_AUTH_PAYLOAD_SIZE = 550
+
+
+class MsgType(IntEnum):
+    """Frame type identifier carried in the protocol header.
+
+    Values are assigned across all protocol phases (auth, handshake,
+    file transfer) so the wire-type registry stays single-sourced.
+    Higher values are reserved for follow-up tickets (e.g. rsync-style
+    SYNC_HASHES and REQUEST_CHUNKS).
+    """
+
+    AUTH = 0
+    HELLO = 1
+    FILE_META = 2
+    FILE_CHUNK = 3
+
 
 async def async_send_msg(writer: asyncio.StreamWriter, msg_type: int, data: bytes) -> None:
-    """
-    Sends a message with a length prefix and type.
-    """
+    """Sends a message with a length prefix and type."""
     # ! = Network Byte Order, B = unsigned char, I = unsigned int
     header = struct.pack("!BI", msg_type, len(data))
     writer.write(header + data)
@@ -20,9 +37,7 @@ async def async_send_msg(writer: asyncio.StreamWriter, msg_type: int, data: byte
 
 
 async def async_recv_msg(reader: asyncio.StreamReader) -> tuple[int | None, bytes | None]:
-    """
-    Receives a message exactly based on its length.
-    """
+    """Receives a message exactly based on its length."""
     try:
         header = await reader.readexactly(5)
     except asyncio.IncompleteReadError:
@@ -38,10 +53,6 @@ async def async_recv_msg(reader: asyncio.StreamReader) -> tuple[int | None, byte
     return msg_type, data
 
 
-# RSA-2048 SubjectPublicKeyInfo DER (294 B) + RSA-2048 PSS signature (256 B)
-_AUTH_PAYLOAD_SIZE = 550
-
-
 async def async_recv_auth_msg(reader: asyncio.StreamReader) -> bytes:
     """Receive a fixed-size auth message (type 0).
 
@@ -55,11 +66,13 @@ async def async_recv_auth_msg(reader: asyncio.StreamReader) -> bytes:
 
     msg_type, length = struct.unpack("!BI", header)
 
-    if msg_type != 0:
-        raise RuntimeError(f"Expected auth message (type 0), got type {msg_type}")
+    if msg_type != MsgType.AUTH:
+        raise RuntimeError(f"Expected auth message (type {MsgType.AUTH}), got type {msg_type}")
 
     if length != _AUTH_PAYLOAD_SIZE:
-        raise RuntimeError(f"Auth message wrong size: got {length} B, expected {_AUTH_PAYLOAD_SIZE} B")
+        raise RuntimeError(
+            f"Auth message wrong size: got {length} B, expected {_AUTH_PAYLOAD_SIZE} B"
+        )
 
     try:
         return await reader.readexactly(_AUTH_PAYLOAD_SIZE)

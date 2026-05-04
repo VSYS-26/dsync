@@ -2,6 +2,7 @@
 
 import asyncio
 import hashlib
+from pathlib import Path
 import ssl
 from typing import Any
 
@@ -14,9 +15,13 @@ from cryptography.hazmat.primitives.serialization import (
     load_der_public_key,
     load_pem_private_key,
 )
+
+from dsync.network.errors import PeerAuthError
+from dsync.network.file_transfer import recv_file, send_file
 from dsync.state import AppState
 
 from .p2p_core import (
+    MsgType,
     async_recv_auth_msg,
     async_recv_msg,
     async_send_msg,
@@ -25,11 +30,10 @@ from .p2p_core import (
 )
 
 _SPKI_SIZE = 294  # RSA-2048 SubjectPublicKeyInfo DER
-_SIG_SIZE = 256   # RSA-2048 PSS signature
-
-
-class PeerAuthError(Exception):
-    """Raised when mutual TLS peer authentication fails."""
+_SIG_SIZE = 256  # RSA-2048 PSS signature
+TEST_FILES = ("hello.txt", "sample.json", "icon.png")
+TEST_FILES_DIR = Path(__file__).resolve().parents[2] / "test-files-to-send"
+RECEIVED_DIR = Path(__file__).resolve().parents[2] / "received-files"
 
 
 class P2PNode:
@@ -65,14 +69,16 @@ class P2PNode:
             device.fingerprint: device.id for device in self.state.devices.trusted_devices
         }
 
-        with open(self.key_path, "rb") as f:
+        with Path(self.key_path).open("rb") as f:
             raw_key = load_pem_private_key(f.read(), password=None)
         if not isinstance(raw_key, RSAPrivateKey):
             raise TypeError("Only RSA private keys are supported for peer auth")
         if raw_key.key_size != 2048:
             raise TypeError(f"Only RSA-2048 keys are supported, got RSA-{raw_key.key_size}")
         self._own_private_key: RSAPrivateKey = raw_key
-        self._own_spki: bytes = raw_key.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)
+        self._own_spki: bytes = raw_key.public_key().public_bytes(
+            Encoding.DER, PublicFormat.SubjectPublicKeyInfo
+        )
 
     async def start(self, host: str, port: int) -> None:
         """Starts the node as an async server or connects as an async client.
@@ -80,7 +86,6 @@ class P2PNode:
         This handles the initial network connection and automatically wraps it in TLS
         using the provided certificates.
         """
-
         # Show error messages
         loop = asyncio.get_running_loop()
 
@@ -173,7 +178,7 @@ class P2PNode:
             own_sig = self._sign_channel_binding(channel_binding)
             auth_payload = self._pack_auth_msg(self._own_spki, own_sig)
 
-            await async_send_msg(writer, 0, auth_payload)
+            await async_send_msg(writer, MsgType.AUTH, auth_payload)
 
             peer_payload = await async_recv_auth_msg(reader)
 
@@ -188,27 +193,40 @@ class P2PNode:
                 raise PeerAuthError("Peer cert must use RSA key")
             self._verify_peer_signature(peer_public_key, channel_binding, peer_sig)
 
-            print(f"[+] Verified: {self.trusted_devices[fingerprint]}")
+            peer_id = self.trusted_devices[fingerprint]
+            if "/" in peer_id or "\\" in peer_id or peer_id in {".", ".."}:
+                raise PeerAuthError(f"Refusing path-unsafe peer id: {peer_id!r}")
+            print(f"[+] Verified: {peer_id}")
 
             # Handshake
             if self.is_server:
                 print("[DEBUG] Server sending hello...")
-                await async_send_msg(writer, 1, b"Hello from server. Data sync can start.")
+                await async_send_msg(
+                    writer, MsgType.HELLO, b"Hello from server. Data sync can start."
+                )
                 print("[DEBUG] Server waiting for client reply...")
-                _, answer = await async_recv_msg(reader)
+                msg_type, answer = await async_recv_msg(reader)
                 if answer is None:
                     raise PeerAuthError("Client closed connection before handshake reply.")
+                if msg_type != MsgType.HELLO:
+                    raise PeerAuthError(
+                        f"Expected hello (type {MsgType.HELLO}), got type {msg_type}"
+                    )
                 print(f"[*] Message from client: {answer.decode('utf-8')}")
             else:
                 print("[DEBUG] Client waiting for hello...")
-                _, msg = await async_recv_msg(reader)
+                msg_type, msg = await async_recv_msg(reader)
                 if msg is None:
                     raise PeerAuthError("Server closed connection before handshake greeting.")
+                if msg_type != MsgType.HELLO:
+                    raise PeerAuthError(
+                        f"Expected hello (type {MsgType.HELLO}), got type {msg_type}"
+                    )
                 print(f"[*] Message from server: {msg.decode('utf-8')}")
                 print("[DEBUG] Client sending reply...")
-                await async_send_msg(writer, 1, b"Hello from client. I'm ready.")
+                await async_send_msg(writer, MsgType.HELLO, b"Hello from client. I'm ready.")
 
-            await self.start_sync(reader, writer)
+            await self.start_sync(reader, writer, peer_id)
 
         except Exception as e:
             print(f"[!] Connection error: {e}")
@@ -216,9 +234,43 @@ class P2PNode:
             writer.close()
             await writer.wait_closed()
 
-    async def start_sync(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
-        """Starts the data synchronization process.
+    async def start_sync(
+        self,
+        reader: asyncio.StreamReader,
+        writer: asyncio.StreamWriter,
+        peer_id: str,
+    ) -> None:
+        """Transfer the configured test files over the authenticated stream.
 
-        Placeholder.
+        Server side receives files into ``RECEIVED_DIR/<peer_id>/<filename>`` until the
+        sender closes the stream. Client side sends each file in
+        ``TEST_FILES`` from ``TEST_FILES_DIR`` and lets the caller close
+        the writer to signal end-of-transfer (TLS streams do not support
+        ``write_eof``).
+
+        Args:
+            reader: Authenticated asyncio stream reader from the connection
+                setup.
+            writer: Authenticated asyncio stream writer from the connection
+                setup.
+            peer_id: Verified trusted-device id of the remote peer. Used as
+                the per-client subdirectory name on the server side.
         """
-        pass
+        if self.is_server:
+            peer_dir = RECEIVED_DIR / peer_id
+            peer_dir.mkdir(parents=True, exist_ok=True)
+            # TODO: future ticket — sender adds a folder/file id (from
+            # AppState.folders) to the meta frame. Receiver resolves
+            # id -> destination path via its own AppState.folders. Until
+            # then, every file lands flat in RECEIVED_DIR/<peer_id>.
+            while True:
+                try:
+                    await recv_file(reader, peer_dir)
+                except asyncio.IncompleteReadError as e:
+                    if e.partial:
+                        raise
+                    break
+        else:
+            for name in TEST_FILES:
+                src = TEST_FILES_DIR / name
+                await send_file(writer, src)
