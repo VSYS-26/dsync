@@ -16,10 +16,12 @@ from cryptography.hazmat.primitives.serialization import (
     load_pem_private_key,
 )
 
-from dsync.network.transfer import recv_file, send_file
+from dsync.network.errors import PeerAuthError
+from dsync.network.file_transfer import recv_file, send_file
 from dsync.state import AppState
 
 from .p2p_core import (
+    MsgType,
     async_recv_auth_msg,
     async_recv_msg,
     async_send_msg,
@@ -32,10 +34,6 @@ _SIG_SIZE = 256  # RSA-2048 PSS signature
 TEST_FILES = ("hello.txt", "sample.json", "icon.png")
 TEST_FILES_DIR = Path(__file__).resolve().parents[2] / "test-files-to-send"
 RECEIVED_DIR = Path(__file__).resolve().parents[2] / "received-files"
-
-
-class PeerAuthError(Exception):
-    """Raised when mutual TLS peer authentication fails."""
 
 
 class P2PNode:
@@ -180,7 +178,7 @@ class P2PNode:
             own_sig = self._sign_channel_binding(channel_binding)
             auth_payload = self._pack_auth_msg(self._own_spki, own_sig)
 
-            await async_send_msg(writer, 0, auth_payload)
+            await async_send_msg(writer, MsgType.AUTH, auth_payload)
 
             peer_payload = await async_recv_auth_msg(reader)
 
@@ -200,20 +198,30 @@ class P2PNode:
             # Handshake
             if self.is_server:
                 print("[DEBUG] Server sending hello...")
-                await async_send_msg(writer, 1, b"Hello from server. Data sync can start.")
+                await async_send_msg(
+                    writer, MsgType.HELLO, b"Hello from server. Data sync can start."
+                )
                 print("[DEBUG] Server waiting for client reply...")
-                _, answer = await async_recv_msg(reader)
+                msg_type, answer = await async_recv_msg(reader)
                 if answer is None:
                     raise PeerAuthError("Client closed connection before handshake reply.")
+                if msg_type != MsgType.HELLO:
+                    raise PeerAuthError(
+                        f"Expected hello (type {MsgType.HELLO}), got type {msg_type}"
+                    )
                 print(f"[*] Message from client: {answer.decode('utf-8')}")
             else:
                 print("[DEBUG] Client waiting for hello...")
-                _, msg = await async_recv_msg(reader)
+                msg_type, msg = await async_recv_msg(reader)
                 if msg is None:
                     raise PeerAuthError("Server closed connection before handshake greeting.")
+                if msg_type != MsgType.HELLO:
+                    raise PeerAuthError(
+                        f"Expected hello (type {MsgType.HELLO}), got type {msg_type}"
+                    )
                 print(f"[*] Message from server: {msg.decode('utf-8')}")
                 print("[DEBUG] Client sending reply...")
-                await async_send_msg(writer, 1, b"Hello from client. I'm ready.")
+                await async_send_msg(writer, MsgType.HELLO, b"Hello from client. I'm ready.")
 
             await self.start_sync(reader, writer)
 

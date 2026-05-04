@@ -2,48 +2,22 @@
 
 import asyncio
 from dataclasses import dataclass
-from enum import IntEnum
 import hashlib
 from pathlib import Path
-import struct
 
 import yaml
 
 from dsync.integrity import compute_sha256
-
-
-class MsgType(IntEnum):
-    """Frame type identifier carried in the protocol header.
-
-    Higher values are reserved for follow-up tickets (e.g. rsync-style
-    SYNC_HASHES and REQUEST_CHUNKS).
-    """
-
-    FILE_META = 1
-    FILE_CHUNK = 2
-
+from dsync.network.errors import (
+    ChunkValidationError,
+    FrameValidationError,
+    TransferIntegrityError,
+)
+from dsync.network.p2p_core import MsgType, async_recv_msg, async_send_msg
 
 DEFAULT_CHUNK_SIZE = 64 * 1024
 MAX_META_SIZE = 8 * 1024
 MAX_CHUNK_SIZE = DEFAULT_CHUNK_SIZE
-HEADER = "!BI"
-HEADER_SIZE = struct.calcsize(HEADER)
-
-
-class TransferError(Exception):
-    """Base class for transfer-related errors."""
-
-
-class FrameValidationError(TransferError):
-    """Raised when a frame header or length is invalid."""
-
-
-class ChunkValidationError(TransferError):
-    """Raised when a file chunk violates the expected transfer contract."""
-
-
-class TransferIntegrityError(TransferError):
-    """Raised when the received data fails integrity checks."""
 
 
 @dataclass(frozen=True)
@@ -76,21 +50,21 @@ class FileMeta:
         ).encode("utf-8")
 
 
-async def _send_frame(writer: asyncio.StreamWriter, msg_type: MsgType, payload: bytes) -> None:
-    """Write one length-prefixed frame to ``writer`` and drain."""
-    writer.write(struct.pack(HEADER, msg_type, len(payload)) + payload)
-    await writer.drain()
-
-
 async def _recv_frame(reader: asyncio.StreamReader) -> tuple[MsgType, bytes]:
-    """Read one length-prefixed frame from ``reader``."""
-    header = await reader.readexactly(HEADER_SIZE)
-    raw_type, length = struct.unpack(HEADER, header)
+    """Read one length-prefixed frame and validate its type and size.
+
+    Re-raises :class:`asyncio.IncompleteReadError` on a clean EOF at the
+    frame boundary so callers can detect a graceful end-of-stream.
+    """
+    raw_type, payload = await async_recv_msg(reader)
+    if raw_type is None or payload is None:
+        raise asyncio.IncompleteReadError(b"", 5)
     try:
         msg_type = MsgType(raw_type)
     except ValueError as exc:
         msg = "Unknown frame type"
         raise FrameValidationError(msg) from exc
+
     if msg_type == MsgType.FILE_META:
         max_len = MAX_META_SIZE
     elif msg_type == MsgType.FILE_CHUNK:
@@ -98,10 +72,10 @@ async def _recv_frame(reader: asyncio.StreamReader) -> tuple[MsgType, bytes]:
     else:
         msg = "Unsupported frame type"
         raise FrameValidationError(msg)
-    if length > max_len:
+
+    if len(payload) > max_len:
         msg = "Frame payload exceeds maximum allowed size"
         raise FrameValidationError(msg)
-    payload = await reader.readexactly(length)
     return msg_type, payload
 
 
@@ -123,11 +97,11 @@ async def send_file(writer: asyncio.StreamWriter, path: Path) -> None:
         raise FileNotFoundError(msg)
     digest = await asyncio.to_thread(compute_sha256, path)
     meta = FileMeta(name=path.name, size=path.stat().st_size, sha256=digest)
-    await _send_frame(writer, MsgType.FILE_META, meta.to_yaml())
+    await async_send_msg(writer, MsgType.FILE_META, meta.to_yaml())
 
     with path.open("rb") as f:
         while chunk := await asyncio.to_thread(f.read, DEFAULT_CHUNK_SIZE):
-            await _send_frame(writer, MsgType.FILE_CHUNK, chunk)
+            await async_send_msg(writer, MsgType.FILE_CHUNK, chunk)
 
 
 async def _recv_and_verify_chunks(
