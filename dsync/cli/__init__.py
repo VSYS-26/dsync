@@ -1,6 +1,9 @@
+"""CLI root Typer app."""
+
 import typer
 
-from dsync.cli.commands import _demo
+from dsync.cli.callbacks.config_dir import config_dir
+from dsync.cli.commands import _demo, peer, sync
 from dsync.cli.commands._hello import hello
 
 cli: typer.Typer = typer.Typer(
@@ -10,6 +13,11 @@ cli: typer.Typer = typer.Typer(
     rich_markup_mode="rich",
 )
 
+# callbacks
+cli.callback()(config_dir)
+
 # commands
 cli.command()(hello)
 cli.add_typer(_demo.app, name="demo")
+cli.add_typer(sync.app, name="sync")
+cli.add_typer(peer.app, name="peer")

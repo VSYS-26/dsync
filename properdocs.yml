@@ -10,6 +10,7 @@ nav:
       - conventions/index.md
       - Verzweigungsmodell: conventions/branching-model.md
       - CLI: conventions/cli.md
+      - Setup: conventions/setup.md
   - Besprechungen:
       - meetings/index.md
       - Protokoll – 18.04.2026: meetings/Meetings Nodes.md
@@ -40,6 +41,7 @@ theme:
     - content.action.edit
 
 plugins:
+  - mike
   - search
   - literate-nav
   - mkdocstrings:

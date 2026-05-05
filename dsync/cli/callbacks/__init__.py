@@ -1,0 +1,1 @@
+"""CLI base app callbacks."""

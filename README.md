@@ -1,6 +1,6 @@
 # dsync
 
-Decentralized file and folder sync between trusted devices – no central server.
+Decentralized file and folder sync between trusted devices - no central server.
 
 A proof-of-concept developed as part of a university project in the course **Distributed Systems**.
 
@@ -24,7 +24,7 @@ Trust between devices is established explicitly and manually. There is no automa
 
 ## Status
 
-Work in progress – early proof-of-concept stage.
+Work in progress - early proof-of-concept stage.
 
 ---
 
@@ -45,18 +45,81 @@ This project uses [uv](https://docs.astral.sh/uv/) for fast Python dependency ma
    ```
 
 ### UV commands
+
 - run a python script
-```bash
-uv run dsync/main.py
-```
+  ```bash
+  uv run dsync/main.py
+  ```
 
 - add a library
+  ```bash
+  uv add library_name
+  ```
+
+- install and run checks
+  ```bash
+  uv run pre-commit install
+  uv run pre-commit install --hook-type commit-msg
+  uv run pre-commit run --all-files
+  ```
+
+---
+
+## Standards and Tooling
+
+### Python standards
+
+- PEP 8: baseline style, naming, indentation, and structure
+- PEP 257: docstring conventions (Google style via Ruff)
+- PEP 484: static typing and type-hint checks (mypy strict mode)
+
+### Git standards
+
+- Conventional Commits for commit messages:
+  https://www.conventionalcommits.org/
+- Commit messages are validated automatically through a `commit-msg` pre-commit hook.
+
+### Enforced checks (pre-commit on each commit)
+
+- Ruff: linting, formatting, import sorting, auto-fixes, docstring checks
+- mypy: static type checking
+- Bandit: security scanning (secrets, weak crypto, insecure patterns)
+
+---
+
+## Testing locally
+
+To test the peer-to-peer connection on your local machine, you need to simulate two devices communicating directly. This requires two separate terminal windows.
+
+#### **1. Generate Certificates & Setup Trust**
+
+Before two peers can communicate, they need their cryptographic identities.
+
+   1. Generate a self-signed certificate and private key for your local test. The script/command will output a SHA-256 fingerprint for the public key.
+   (Note: Since both local nodes will run in the same directory, they will share this certificate to authenticate each other during the local test).
+   2. Create or edit the configuration file at dsync-config/devices.yaml.
+   3. Add the generated fingerprint to this file to authorize the connection (Mutual TLS authentication):
+   ```yaml
+   trusted_devices:
+      - id: local-test-node
+        fingerprint: "YOUR_GENERATED_FINGERPRINT_HASH_HERE"
+   ```
+#### **2. Run the two Terminals**
+
+Open two separate terminals in the root directory of the project.
+
+**Terminal 1: Start Node A (Server mode)**
+
+This node opens a local port (default 9999) and waits for a trusted partner to connect.
 ```bash
-uv add library_name
+uv run python -m dsync.main sync start --mode server
 ```
 
-- install & run linter and security checks
+**Terminal 2: Start Node B (Client mode)**
+
+This node connects directly to the local server and initiates the Mutual TLS handshake and sync process.
 ```bash
-uv run pre-commit install
-uv run pre-commit run --all-files
+uv run python -m dsync.main sync start --mode client
 ```
+
+If everything is configured correctly, you will see the Mutual TLS verification succeed and the nodes exchanging their file hashes.
