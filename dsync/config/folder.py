@@ -24,6 +24,7 @@ class FolderEntry(BaseModel):
     id: str = Field(min_length=1)
     path: Path
     mode: SyncMode
+    devices: list[str] | None = None
 
 
 class FoldersConfig(YamlFileConfig):

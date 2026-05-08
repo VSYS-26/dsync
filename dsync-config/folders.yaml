@@ -8,13 +8,20 @@
 #   - id: documents
 #     path: /home/user/documents
 #     mode: mirror
-#
+#     devices:
+#       - laptop-anna
+#       - server-basement
+
 #   # Example: one-way backup of a folder to other peers. (Sends backup)
 #   - id: notes
 #     path: /home/user/notes
 #     mode: backup-to-peer
+#     devices:
+#       - laptop-anna
+#       - server-basement
 #
 #   # Example: one-way backup of a folder from other peers. (Receives backup)
 #   - id: pictures
 #     path: /home/user/pictures
 #     mode: backup-from-peer
+#     # When devices is missing, then all trusted devices are used.
