@@ -10,5 +10,5 @@
 #     fingerprint: <fingerprint-of-annas-laptop>
 
 #   # Example: a home-lab backup server.
-#   - id: server-keller
+#   - id: server-basement
 #     fingerprint: <fingerprint-of-keller-server>

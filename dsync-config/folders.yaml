@@ -5,16 +5,16 @@
 
 # entries:
 #   # Example: sync a whole folder bidirectionally.
-#   - id: dokumente
-#     path: /home/user/Dokumente
+#   - id: documents
+#     path: /home/user/documents
 #     mode: mirror
 #
 #   # Example: one-way backup of a folder to other peers. (Sends backup)
-#   - id: notizen
-#     path: /home/user/notizen.txt
+#   - id: notes
+#     path: /home/user/notes
 #     mode: backup-to-peer
 #
 #   # Example: one-way backup of a folder from other peers. (Receives backup)
-#   - id: fotos
-#     path: /home/user/Fotos
+#   - id: pictures
+#     path: /home/user/pictures
 #     mode: backup-from-peer
