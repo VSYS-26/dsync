@@ -14,6 +14,7 @@ class SyncMode(StrEnum):
 
     MIRROR = "mirror"
     BACKUP_TO_PEER = "backup-to-peer"
+    BACKUP_FROM_PEER = "backup-from-peer"
 
 
 class FolderEntry(BaseModel):
