@@ -17,13 +17,9 @@ def list(ctx: typer.Context) -> None:
 
     lines = ["Current Folder Configuration:"]
     for e in entries:
-        lines.append(
-            f"""\
-    • {e.id}
-      path:    {e.path}
-      mode:    {e.mode.value}
-      devices: {", ".join(e.devices)}
-    """
-        )
+        lines.append(f"    • {e.id}")
+        lines.append(f"      path:    {e.path}")
+        lines.append(f"      mode:    {e.mode.value}")
+        lines.append(f"      devices: {', '.join(e.devices)}")
 
     success("\n".join(lines))

@@ -52,11 +52,12 @@ def add(
 
     state.folders.save(state.config_dir, overwrite=True)
     e = list(filter(lambda f: f.id == id, state.folders.entries))[0]
-    lines = ["Added folder:", f"""\
-    • {e.id}
-      path:    {e.path}
-      mode:    {e.mode.value}
-    """]
+    lines = [
+        "Added folder:",
+        f"    • {e.id}",
+        f"      path:    {e.path}",
+        f"      mode:    {e.mode.value}",
+    ]
 
     if e.devices is not None:
         lines.append(f"      devices: {', '.join(e.devices)}")
