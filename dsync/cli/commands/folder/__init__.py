@@ -1,0 +1,11 @@
+"""Top-level `folder` CLI group exposing folder management commands."""
+
+from __future__ import annotations
+
+import typer
+
+from .list import list
+
+app: typer.Typer = typer.Typer(help="Folder management commands", no_args_is_help=True)
+
+app.command()(list)
