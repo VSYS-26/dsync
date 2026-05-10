@@ -56,7 +56,9 @@ def add(
     • {e.id}
       path:    {e.path}
       mode:    {e.mode.value}
-      devices: {", ".join(e.devices)}
     """]
+
+    if e.devices is not None:
+        lines.append(f"      devices: {', '.join(e.devices)}")
 
     success("\n".join(lines))
