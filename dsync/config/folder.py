@@ -14,6 +14,7 @@ class SyncMode(StrEnum):
 
     MIRROR = "mirror"
     BACKUP_TO_PEER = "backup-to-peer"
+    BACKUP_FROM_PEER = "backup-from-peer"
 
 
 class FolderEntry(BaseModel):
@@ -23,6 +24,7 @@ class FolderEntry(BaseModel):
     id: str = Field(min_length=1)
     path: Path
     mode: SyncMode
+    devices: list[str] | None = None
 
 
 class FoldersConfig(YamlFileConfig):
