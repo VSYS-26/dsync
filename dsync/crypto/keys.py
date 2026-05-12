@@ -103,3 +103,33 @@ def public_key_fingerprint(public_key_pem: bytes, fmt: FingerprintFormat = "hex"
     if fmt == "base64url":
         return "b64u-" + base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
     raise ValueError(f"Unsupported fingerprint format: {fmt}")
+
+
+def is_valid_fingerprint(fp: str) -> bool:
+    """Return True if ``fp`` looks like a supported fingerprint string.
+
+    Accepted forms:
+    - "hex-" prefix followed by 64 hex chars
+    - "b64u-" prefix followed by urlsafe base64 (padding removed) of 32 bytes
+    - raw 64-char hex string
+    """
+    if not isinstance(fp, str) or not fp:
+        return False
+
+    if fp.startswith("hex-"):
+        hexpart = fp[4:]
+        return len(hexpart) == 64 and all(c in "0123456789abcdefABCDEF" for c in hexpart)
+
+    if fp.startswith("b64u-"):
+        b64part = fp[5:]
+        padded = b64part + ("=" * (-len(b64part) % 4))
+        try:
+            decoded = base64.urlsafe_b64decode(padded.encode("ascii"))
+        except Exception:
+            return False
+        return len(decoded) == 32
+
+    if len(fp) == 64 and all(c in "0123456789abcdefABCDEF" for c in fp):
+        return True
+
+    return False
