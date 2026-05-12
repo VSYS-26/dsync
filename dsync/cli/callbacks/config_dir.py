@@ -5,7 +5,7 @@ from typing import Annotated
 
 import typer
 
-from dsync.cli.console import info, warn
+from dsync.cli.console import error, info, warn
 from dsync.config import DevicesConfig, FoldersConfig
 from dsync.state import AppState
 
@@ -35,6 +35,24 @@ def config_dir(
 
     folders = FoldersConfig.load(directory)
     devices = DevicesConfig.load(directory)
+
+    # If devices field is omitted, use all trusted devices
+    resolved_entries = []
+    trusted_device_ids = [dev.id for dev in devices.trusted_devices]
+    for entry in folders.entries:
+        if entry.devices is None:
+            resolved_entries.append(entry.model_copy(update={"devices": trusted_device_ids}))
+        else:
+            for device_id in entry.devices:
+                if device_id not in trusted_device_ids:
+                    error(
+                        f"Trusted device {device_id} of folder {directory} is not listed in devices.yaml"
+                    )
+                    raise ValueError(
+                        f"Trusted device {device_id} of folder {directory} is not listed in devices.yaml"
+                    )
+            resolved_entries.append(entry.model_copy(update={"devices": entry.devices}))
+    folders.entries = resolved_entries
 
     info(
         f"loaded config from {directory}: "
