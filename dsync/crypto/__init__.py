@@ -9,6 +9,7 @@ from .keys import (
     load_keypair,
     public_key_fingerprint,
     save_keypair,
+    is_valid_fingerprint,
 )
 
 __all__ = [
@@ -18,4 +19,5 @@ __all__ = [
     "load_keypair",
     "public_key_fingerprint",
     "save_keypair",
+    "is_valid_fingerprint",
 ]
