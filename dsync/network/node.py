@@ -19,6 +19,7 @@ from cryptography.hazmat.primitives.serialization import (
 from dsync.network.errors import PeerAuthError
 from dsync.network.file_transfer import recv_file, send_file
 from dsync.state import AppState
+from dsync.config import FolderEntry
 
 from .p2p_core import (
     MsgType,
@@ -31,8 +32,6 @@ from .p2p_core import (
 
 _SPKI_SIZE = 294  # RSA-2048 SubjectPublicKeyInfo DER
 _SIG_SIZE = 256  # RSA-2048 PSS signature
-TEST_FILES = ("hello.txt", "sample.json", "icon.png")
-TEST_FILES_DIR = Path(__file__).resolve().parents[2] / "test-files-to-send"
 RECEIVED_DIR = Path(__file__).resolve().parents[2] / "received-files"
 
 
@@ -50,6 +49,7 @@ class P2PNode:
         cert_path: str,
         key_path: str,
         state: AppState,
+        folder: FolderEntry | None = None,
     ) -> None:
         """Initializes a new P2P node.
 
@@ -59,11 +59,13 @@ class P2PNode:
             cert_path (str): The file path to ones own TLS certificate (.pem).
             key_path (str): The file path to ones own private key (.pem).
             state (AppState): The global application runtime state containing configurations.
+            folder (FolderEntry): Optional folder configuration for sync (client only).
         """
         self.is_server = is_server
         self.cert_path = cert_path
         self.key_path = key_path
         self.state = state
+        self.folder = folder
 
         self.trusted_devices: dict[str, str] = {
             device.fingerprint: device.id for device in self.state.devices.trusted_devices
@@ -271,6 +273,21 @@ class P2PNode:
                         raise
                     break
         else:
-            for name in TEST_FILES:
-                src = TEST_FILES_DIR / name
-                await send_file(writer, src)
+            folder_path = Path(self.folder.path)
+
+            if not folder_path.exists():
+                raise FileNotFoundError(f"Folder {folder_path} does not exist")
+
+            if not folder_path.is_dir():
+                raise NotADirectoryError(f"{folder_path} is not a directory")
+
+            files_to_send = list(folder_path.rglob("*")) if self.folder.recursive else list(folder_path.glob("*"))
+            files_to_send = [f for f in files_to_send if f.is_file()]
+
+            if not files_to_send:
+                print(f"[DEBUG] No files to send in {folder_path}")
+                return
+
+            print(f"[DEBUG] Sending {len(files_to_send)} file(s) from {folder_path}")
+            for file_path in files_to_send:
+                await send_file(writer, file_path)

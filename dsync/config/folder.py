@@ -23,6 +23,7 @@ class FolderEntry(BaseModel):
     id: str = Field(min_length=1)
     path: Path
     mode: SyncMode
+    recursive: bool = True
 
 
 class FoldersConfig(YamlFileConfig):
