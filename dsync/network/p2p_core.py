@@ -13,6 +13,9 @@ from cryptography.hazmat.primitives import serialization
 # RSA-2048 SubjectPublicKeyInfo DER (294 B) + RSA-2048 PSS signature (256 B)
 _AUTH_PAYLOAD_SIZE = 550
 
+# Upper bound for a CONFIG frame payload (64 KiB is generous for YAML config data)
+MAX_CONFIG_SIZE = 64 * 1024
+
 
 class MsgType(IntEnum):
     """Frame type identifier carried in the protocol header.
@@ -150,6 +153,9 @@ async def async_send_config(writer: asyncio.StreamWriter, config_data: bytes) ->
 async def async_recv_config(reader: asyncio.StreamReader) -> bytes:
     """Receive config data (e.g., FoldersConfig as YAML).
 
+    Reads the frame header first and rejects payloads that exceed
+    ``MAX_CONFIG_SIZE`` before allocating or reading the full body.
+
     Args:
         reader: Authenticated stream reader.
 
@@ -157,14 +163,28 @@ async def async_recv_config(reader: asyncio.StreamReader) -> bytes:
         Config data as bytes (e.g., YAML).
 
     Raises:
-        RuntimeError: If message type is not CONFIG.
+        RuntimeError: If message type is not CONFIG, or if the declared
+            payload length exceeds ``MAX_CONFIG_SIZE``.
     """
-    msg_type, data = await async_recv_msg(reader)
-    if msg_type is None or data is None:
-        raise RuntimeError("Connection closed before config received")
+    try:
+        header = await reader.readexactly(5)
+    except asyncio.IncompleteReadError as err:
+        raise RuntimeError("Connection closed before config received") from err
+
+    msg_type, length = struct.unpack("!BI", header)
+
     if msg_type != MsgType.CONFIG:
         raise RuntimeError(f"Expected CONFIG (type {MsgType.CONFIG}), got type {msg_type}")
-    return data
+
+    if length > MAX_CONFIG_SIZE:
+        raise RuntimeError(
+            f"Config payload too large: {length} B exceeds limit of {MAX_CONFIG_SIZE} B"
+        )
+
+    try:
+        return await reader.readexactly(length)
+    except asyncio.IncompleteReadError as err:
+        raise RuntimeError("Connection lost during config reception.") from err
 
 
 async def async_send_config_ack(writer: asyncio.StreamWriter) -> None:
