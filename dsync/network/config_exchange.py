@@ -38,7 +38,9 @@ class ConfigExchange:
             reader: Stream reader from peer.
             folders_config: Source's folder configuration.
         """
-        config_yaml = yaml.dump(folders_config.model_dump()).encode("utf-8")
+        config_yaml = yaml.safe_dump(
+            folders_config.model_dump(mode="json")
+        ).encode("utf-8")
         print(f"[*] Sending config to peer ({len(config_yaml)} bytes)...")
         await async_send_config(writer, config_yaml)
         await async_recv_config_ack(reader)
