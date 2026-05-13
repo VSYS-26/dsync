@@ -184,7 +184,7 @@ async def async_recv_config(reader: asyncio.StreamReader) -> bytes:
     try:
         return await reader.readexactly(length)
     except asyncio.IncompleteReadError as err:
-        raise RuntimeError("Connection lost during config reception.") from err
+        raise RuntimeError("Connection lost during config reception") from err
 
 
 async def async_send_config_ack(writer: asyncio.StreamWriter) -> None:
