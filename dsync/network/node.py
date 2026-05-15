@@ -202,11 +202,9 @@ class P2PNode:
 
             # Handshake
             if self.is_server:
-                print("[DEBUG] Server sending hello...")
                 await async_send_msg(
                     writer, MsgType.HELLO, b"Hello from server. Data sync can start."
                 )
-                print("[DEBUG] Server waiting for client reply...")
                 msg_type, answer = await async_recv_msg(reader)
                 if answer is None:
                     raise PeerAuthError("Client closed connection before handshake reply.")
@@ -216,7 +214,6 @@ class P2PNode:
                     )
                 print(f"[*] Message from client: {answer.decode('utf-8')}")
             else:
-                print("[DEBUG] Client waiting for hello...")
                 msg_type, msg = await async_recv_msg(reader)
                 if msg is None:
                     raise PeerAuthError("Server closed connection before handshake greeting.")
@@ -225,7 +222,6 @@ class P2PNode:
                         f"Expected hello (type {MsgType.HELLO}), got type {msg_type}"
                     )
                 print(f"[*] Message from server: {msg.decode('utf-8')}")
-                print("[DEBUG] Client sending reply...")
                 await async_send_msg(writer, MsgType.HELLO, b"Hello from client. I'm ready.")
 
             await self.start_sync(reader, writer, peer_id)
