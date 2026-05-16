@@ -32,6 +32,7 @@ class MsgType(IntEnum):
     FILE_CHUNK = 3
     CONFIG = 4
     CONFIG_ACK = 5
+    FILE_VERIFY = 6
 
 
 async def async_send_msg(writer: asyncio.StreamWriter, msg_type: int, data: bytes) -> None:

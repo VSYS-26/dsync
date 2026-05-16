@@ -79,7 +79,7 @@ async def _recv_frame(reader: asyncio.StreamReader) -> tuple[MsgType, bytes]:
     return msg_type, payload
 
 
-async def send_file(writer: asyncio.StreamWriter, path: Path) -> None:
+async def send_file(writer: asyncio.StreamWriter, reader: asyncio.StreamReader, path: Path) -> None:
     """Send one file over an open asyncio TLS stream in chunks.
 
     Sends a YAML meta frame (name, size, sha256) followed by raw chunk
@@ -87,14 +87,17 @@ async def send_file(writer: asyncio.StreamWriter, path: Path) -> None:
 
     Args:
         writer: Authenticated asyncio stream from the connection setup.
+        reader: Authenticated asyncion stream from the connection setup.
         path: Source file to transmit.
 
     Raises:
         FileNotFoundError: If ``path`` does not exist or is not a regular file.
+        TransferIntegrityError: If peer's hash verification fails or wrong message type received.
     """
     if not path.is_file():
         msg = f"Not a regular file: {path}"
         raise FileNotFoundError(msg)
+
     digest = await asyncio.to_thread(compute_sha256, path)
     meta = FileMeta(name=path.name, size=path.stat().st_size, sha256=digest)
     await async_send_msg(writer, MsgType.FILE_META, meta.to_yaml())
@@ -103,6 +106,21 @@ async def send_file(writer: asyncio.StreamWriter, path: Path) -> None:
         while chunk := await asyncio.to_thread(f.read, DEFAULT_CHUNK_SIZE):
             await async_send_msg(writer, MsgType.FILE_CHUNK, chunk)
 
+    msg_type, peer_hash_bytes = await async_recv_msg(reader)
+    if msg_type is None or peer_hash_bytes is None:
+        msg = "Connection closed before receiving peer hash verification"
+        raise TransferIntegrityError(msg)
+    if msg_type != MsgType.FILE_VERIFY:
+        msg = f"Excpected FILE_VERIFY (type {MsgType.FILE_VERIFY}), got type {msg_type}"
+        raise TransferIntegrityError(msg)
+    
+    peer_hash = peer_hash_bytes.decode('utf-8')
+    if peer_hash != digest:
+        print(f"[!] WARNING: Hash mismatch for file '{path.name}'")
+        print(f"    Source hash: {digest}")
+        print(f"    Peer hash: {peer_hash}")
+    else:
+        print(f"[+] Verified: {path.name} (hash match confirmed my peer)")
 
 async def _recv_and_verify_chunks(
     reader: asyncio.StreamReader, target: Path, meta: FileMeta
@@ -137,20 +155,26 @@ async def _recv_and_verify_chunks(
             digest.update(payload)
             received += len(payload)
 
-    if digest.hexdigest() != meta.sha256:
+    computed_hash = digest.hexdigest()
+    if computed_hash != meta.sha256:
         msg = "SHA-256 mismatch after transfer"
         raise TransferIntegrityError(msg)
 
+    return computed_hash
 
-async def recv_file(reader: asyncio.StreamReader, target_dir: Path) -> Path:
+
+async def recv_file(reader: asyncio.StreamReader, writer: asyncio.StreamWriter, target_dir: Path) -> Path:
     """Receive one file announced by a meta frame followed by chunk frames.
 
     Reads the meta frame, derives the destination path from ``target_dir``
     and ``meta.name`` (basename only), then receives and verifies the body
-    via ``_recv_and_verify_chunks``. Removes a partial target on any failure.
+    via ``_recv_and_verify_chunks``. After a successful verification, sends
+    the computed hash back to sender via FILE_VERIFY message for bidirectional
+    verification. Removes a partial target on any failure.
 
     Args:
         reader: Authenticated asyncio stream from the connection setup.
+        writer: Authenticated asyncio stream from the connection setup.
         target_dir: Destination directory. Must exist.
 
     Returns:
@@ -168,8 +192,11 @@ async def recv_file(reader: asyncio.StreamReader, target_dir: Path) -> Path:
 
     target = target_dir / Path(meta.name).name
     try:
-        await _recv_and_verify_chunks(reader, target, meta)
+        computed_hash = await _recv_and_verify_chunks(reader, target, meta)
+
+        await async_send_msg(writer, MsgType.FILE_VERIFY, computed_hash.encode('utf-8'))
     except BaseException:
         target.unlink(missing_ok=True)
         raise
+
     return target.resolve()
