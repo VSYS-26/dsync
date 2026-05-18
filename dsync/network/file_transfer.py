@@ -3,6 +3,7 @@
 import asyncio
 from dataclasses import dataclass
 import hashlib
+import logging
 from pathlib import Path
 
 import yaml
@@ -14,6 +15,8 @@ from dsync.network.errors import (
     TransferIntegrityError,
 )
 from dsync.network.p2p_core import MsgType, async_recv_msg, async_send_msg
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_CHUNK_SIZE = 64 * 1024
 MAX_META_SIZE = 8 * 1024
@@ -111,20 +114,20 @@ async def send_file(writer: asyncio.StreamWriter, reader: asyncio.StreamReader, 
         msg = "Connection closed before receiving peer hash verification"
         raise TransferIntegrityError(msg)
     if msg_type != MsgType.FILE_VERIFY:
-        msg = f"Excpected FILE_VERIFY (type {MsgType.FILE_VERIFY}), got type {msg_type}"
+        msg = f"Expected FILE_VERIFY (type {MsgType.FILE_VERIFY}), got type {msg_type}"
         raise TransferIntegrityError(msg)
     
     peer_hash = peer_hash_bytes.decode('utf-8')
     if peer_hash != digest:
-        print(f"[!] WARNING: Hash mismatch for file '{path.name}'")
-        print(f"    Source hash: {digest}")
-        print(f"    Peer hash: {peer_hash}")
+        raise TransferIntegrityError(
+            f"Hash mismatch: source={digest}, peer={peer_hash}"
+        )
     else:
-        print(f"[+] Verified: {path.name} (hash match confirmed my peer)")
+        logger.info(f"[+] Verified: {path.name} (hash match confirmed my peer)")
 
 async def _recv_and_verify_chunks(
     reader: asyncio.StreamReader, target: Path, meta: FileMeta
-) -> None:
+) -> str:
     """Read chunk frames into ``target`` and verify against ``meta.sha256``.
 
     Args:
