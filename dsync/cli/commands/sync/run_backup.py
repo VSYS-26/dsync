@@ -10,6 +10,7 @@ import typer
 from dsync.cli.console import info, success, warn, error
 from dsync.identity import PeerMapStore
 from dsync.network.node import P2PNode
+from dsync.config import SyncMode
 
 if TYPE_CHECKING:
     from dsync.state import AppState
@@ -33,6 +34,10 @@ def sync(
 
     Without --folder-id: syncs all folders from folders.yaml.
     With --folder-id: syncs only the specific folder.
+
+    Only folders with mode 'mirror' or 'backup-to-peer' are sent.
+    Folders with mode 'backup-from-peer' are receive-only and are skipped
+    by this send command.
 
     Each folder is synced with all its configured trusted devices.
     """
@@ -71,7 +76,7 @@ def sync(
         _sync_all_folders(folders_to_sync, peer_map, cert, key, state)
     )
 
-    info(f"\n{'='*60}")
+    info(f"{'='*60}")
     success(f"Completed: {total_syncs} successful sync(s)")
     if failed_syncs > 0:
         warn(f"Failed: {failed_syncs} sync(s)")
@@ -89,8 +94,17 @@ async def _sync_all_folders(
     failed_syncs = 0
 
     for idx, folder in enumerate(folders_to_sync, start=1):
-        info(f"\n[{idx}/{len(folders_to_sync)}] Folder: {folder.id}")
+        # Mode filter: only send mirror and backup-to-peer
+        if folder.mode == SyncMode.BACKUP_FROM_PEER:
+            info(f"[{idx}/{len(folders_to_sync)}] Folder: {folder.id} - SKIPPED (mode backup-from-peer: receive only)")
+            continue
+        if folder.mode not in (SyncMode.MIRROR, SyncMode.BACKUP_TO_PEER):
+            warn(f"Unknown mode for folder {folder.id}, skipping")
+            continue
+
+        info(f"[{idx}/{len(folders_to_sync)}] Folder: {folder.id}")
         info(f"    Path: {folder.path}")
+        info(f"    Mode: {folder.mode.value}")
         info(f"    Peers: {', '.join(folder.devices)}")
 
         sync_tasks = []
