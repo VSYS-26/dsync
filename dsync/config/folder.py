@@ -25,6 +25,7 @@ class FolderEntry(BaseModel):
     path: Path
     mode: SyncMode
     devices: list[str] | None = None
+    recursive: bool = True
 
 
 class FoldersConfig(YamlFileConfig):
