@@ -11,4 +11,4 @@
 
 #   # Example: a home-lab backup server.
 #   - id: server-basement
-#     fingerprint: <fingerprint-of-keller-server>
+#     fingerprint: <fingerprint-of-basement-server>
