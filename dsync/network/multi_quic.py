@@ -218,6 +218,18 @@ class MultiQuicEndpoint(asyncio.DatagramProtocol):
         """Drop ``peer_addr`` from the routing table (does not close the protocol)."""
         self._protocols_by_addr.pop(peer_addr, None)
 
+    def send_datagram(self, data: bytes, peer_addr: tuple[str, int]) -> None:
+        """Send a raw UDP datagram from the multiplexed socket to ``peer_addr``.
+
+        Bypasses every child ``QuicConnection``: useful for the hole-punch
+        burst, which needs to leave from the *same* external NAT port the
+        relay observed. The datagram is not a valid QUIC packet, so any
+        aioquic stack receiving it silently drops it.
+        """
+        if self._transport is None:
+            raise RuntimeError("endpoint not yet connected")
+        self._transport.sendto(data, peer_addr)
+
     async def close(self) -> None:
         """Close every child protocol and the underlying transport."""
         for proto in list(self._protocols_by_addr.values()):

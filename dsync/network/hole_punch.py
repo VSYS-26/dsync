@@ -38,6 +38,8 @@ if TYPE_CHECKING:
 
     from aioquic.quic.configuration import QuicConfiguration
 
+    from dsync.network.multi_quic import MultiQuicEndpoint
+
 logger = logging.getLogger(__name__)
 
 #: Magic bytes for a hole-punch UDP packet. Chosen so the first byte (0x44
@@ -216,4 +218,27 @@ async def _send_punch_burst(
     """Fire ``count`` magic UDP packets toward ``peer_addr`` spaced by ``interval``."""
     for _ in range(count):
         sock.sendto(PUNCH_MAGIC, peer_addr)
+        await asyncio.sleep(interval)
+
+
+async def punch_via_endpoint(
+    endpoint: MultiQuicEndpoint,
+    peer_addr: tuple[str, int],
+    *,
+    count: int = DEFAULT_BURST_COUNT,
+    interval: float = DEFAULT_BURST_INTERVAL,
+) -> None:
+    """Send a hole-punch burst over an already-bound :class:`MultiQuicEndpoint`.
+
+    Sends ``count`` magic UDP datagrams toward ``peer_addr`` spaced by
+    ``interval`` seconds. Because the datagrams leave from the multiplexed
+    transport — the same one carrying the daemon's relay control channel
+    — they share the relay-observed external NAT mapping, which is what
+    makes hole punching actually open the pinhole on cone NATs.
+
+    Cheap to call: ~``count * interval`` seconds, no allocations beyond
+    the magic byte string.
+    """
+    for _ in range(count):
+        endpoint.send_datagram(PUNCH_MAGIC, peer_addr)
         await asyncio.sleep(interval)

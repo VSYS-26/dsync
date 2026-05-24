@@ -3,10 +3,9 @@
 ``dsync relay connect <id>`` keeps a QUIC connection to the named relay
 open, accepts incoming peer-to-peer dials brokered by the relay, and
 hosts a local IPC socket so ``dsync sync run_backup`` can request
-outbound syncs.
-
-Long-running and foreground for now — restart/keepalive/auto-reconnect
-land in PR 8.
+outbound syncs. The daemon auto-reconnects with exponential backoff if
+the control channel drops; an app-layer ``CONTROL_PING`` every 15 s
+keeps the NAT mapping warm.
 """
 
 from __future__ import annotations
@@ -19,6 +18,11 @@ from typing import TYPE_CHECKING, Annotated
 import typer
 
 from dsync.cli.console import error, info, success, warn
+from dsync.network.errors import (
+    RelayAuthError,
+    RelayError,
+    RelayProtocolError,
+)
 from dsync.network.relay_daemon import RelayDaemon
 
 if TYPE_CHECKING:
@@ -78,6 +82,27 @@ def connect(
         success("Relay connection closed cleanly.")
     except KeyboardInterrupt:
         warn("\nShutting down...")
+    except RelayAuthError as exc:
+        error(f"Relay authentication failed: {exc}")
+        error(
+            "Hint: the relay's TLS certificate fingerprint does not match the "
+            "`fingerprint` field in your relays.yaml for this relay id. "
+            "Re-issue the entry or fix the pin."
+        )
+        raise typer.Exit(code=1) from exc
+    except (ConnectionRefusedError, OSError) as exc:
+        error(f"Could not reach relay at {relay.host}:{relay.port}: {exc}")
+        error(
+            "Hint: make sure `dsync relay serve` is running on that host:port "
+            "and that no firewall is blocking the UDP port."
+        )
+        raise typer.Exit(code=1) from exc
+    except (RelayProtocolError, RelayError) as exc:
+        error(f"Relay protocol error: {exc}")
+        raise typer.Exit(code=1) from exc
+    except FileNotFoundError as exc:
+        error(f"Cert or key file not found: {exc}")
+        raise typer.Exit(code=1) from exc
     except Exception as exc:
         error(f"Daemon stopped: {exc}")
         raise typer.Exit(code=1) from exc

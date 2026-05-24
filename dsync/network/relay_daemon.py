@@ -7,7 +7,9 @@ Responsibilities:
   it via :class:`MultiQuicEndpoint` — the relay control channel and any
   peer-to-peer data channels share the same socket so the relay-observed
   NAT mapping is preserved.
-* Open the relay control channel, authenticate, and stay registered.
+* Open the relay control channel, authenticate, and **stay** registered:
+  exponential-backoff reconnect on drops, app-layer ``CONTROL_PING`` every
+  ``KEEPALIVE_INTERVAL`` seconds so the NAT mapping doesn't expire.
 * Accept incoming peer-to-peer dials when the relay pushes ``PUNCH_INFO``
   saying we're the listener for a sync. Run :class:`PeerSession` ``as_peer``
   to receive files.
@@ -15,8 +17,6 @@ Responsibilities:
   outbound-sync a folder to a peer. We send ``CONNECT_REQUEST``, await the
   relay's ``PUNCH_INFO`` reply, open the peer-to-peer QUIC connection, and
   run :class:`PeerSession` ``as_source``.
-
-Reconnect / keepalive / auto-recovery are deferred to PR 8.
 """
 
 from __future__ import annotations
@@ -25,11 +25,12 @@ import asyncio
 import contextlib
 from dataclasses import dataclass
 import logging
-from typing import TYPE_CHECKING
+import os
+from typing import TYPE_CHECKING, Final
 
 from dsync.network.errors import RelayAuthError, RelayError, RelayProtocolError
+from dsync.network.hole_punch import HolePunchError, punch_via_endpoint
 from dsync.network.local_ipc import (
-    IpcResponse,
     LocalControlServer,
     SyncFolderRequest,
     default_ipc_dir,
@@ -68,6 +69,31 @@ if TYPE_CHECKING:
     from dsync.state import AppState
 
 logger = logging.getLogger(__name__)
+
+#: Seconds between app-layer ``CONTROL_PING`` exchanges with the relay.
+#: Consumer NATs commonly drop idle UDP mappings after 30–60 s; this stays
+#: well below that. QUIC's own PING fires only on transport need so we
+#: cannot rely on it alone.
+KEEPALIVE_INTERVAL: Final[float] = 15.0
+
+#: Seconds to wait for the ``CONTROL_PING`` reply before declaring the
+#: relay channel dead and triggering a reconnect.
+KEEPALIVE_REPLY_TIMEOUT: Final[float] = 5.0
+
+#: Initial reconnect delay; doubled on each failure up to ``RECONNECT_BACKOFF_MAX``.
+RECONNECT_BACKOFF_INITIAL: Final[float] = 1.0
+RECONNECT_BACKOFF_MAX: Final[float] = 60.0
+
+#: Outbound peer dial: max attempts including the first. The second attempt
+#: re-bursts before retrying the QUIC handshake — gives the listener's NAT
+#: a second chance to open the pinhole if the first burst raced badly.
+PEER_DIAL_MAX_ATTEMPTS: Final[int] = 2
+
+#: Per-attempt timeout for the peer-to-peer QUIC handshake.
+PEER_DIAL_HANDSHAKE_TIMEOUT: Final[float] = 5.0
+
+#: Backoff between the two peer-dial attempts.
+PEER_DIAL_RETRY_DELAY: Final[float] = 1.5
 
 
 @dataclass
@@ -116,6 +142,7 @@ class RelayDaemon:
 
         self._endpoint: MultiQuicEndpoint | None = None
         self._relay_protocol: QuicConnectionProtocol | None = None
+        self._relay_connected = asyncio.Event()
         self._ipc_server: LocalControlServer | None = None
         # Per-peer-addr expected-dial info populated by relay PUNCH_INFO pushes.
         self._pending_dials: dict[tuple[str, int], _PendingDial] = {}
@@ -135,8 +162,18 @@ class RelayDaemon:
             raise RelayError("daemon not running")
         return self._endpoint.local_addr
 
+    @property
+    def is_relay_connected(self) -> bool:
+        """True when the relay control channel is currently authenticated."""
+        return self._relay_connected.is_set()
+
     async def start(self) -> None:
-        """Bind the socket, authenticate to the relay, host the IPC socket."""
+        """Bind the socket, run the first relay handshake, start background loops.
+
+        Startup is **synchronous**: if the first connection or AUTH fails, the
+        exception propagates so the CLI can surface a clear error. Once the
+        first attempt succeeds, the maintenance and keepalive loops take over.
+        """
         self._endpoint = await MultiQuicEndpoint.bind(host="0.0.0.0", port=0)
         self._endpoint.enable_server(
             build_quic_configuration(
@@ -146,30 +183,17 @@ class RelayDaemon:
             ),
         )
 
-        # Open the relay control channel.
-        self._relay_protocol = await self._endpoint.add_outgoing(
-            (self._relay.host, self._relay.port),
-            build_quic_configuration(
-                is_client=True,
-                cert_path=self._cert_path,
-                key_path=self._key_path,
-            ),
-            stream_handler=self._on_relay_initiated_stream,
-        )
-        await asyncio.wait_for(self._relay_protocol.wait_connected(), timeout=10.0)
+        # First connection synchronously — fail fast on bad config.
+        await self._connect_relay_once()
 
-        # Pin the relay's TLS cert against the configured fingerprint.
-        self._verify_relay_cert()
-
-        # Authenticate.
-        await self._authenticate_to_relay()
-
-        # Accept loop for incoming peer-to-peer dials.
+        # Long-running supervisors.
         self._spawn(self._incoming_dial_loop())
+        self._spawn(self._maintain_relay())
+        self._spawn(self._keepalive_loop())
 
         # IPC server.
         socket_path = self._ipc_socket_path or (
-            default_ipc_dir() / f"relay-{__import__('os').getpid()}.sock"
+            default_ipc_dir() / f"relay-{os.getpid()}.sock"
         )
         self._ipc_server = LocalControlServer(
             socket_path=socket_path,
@@ -189,6 +213,7 @@ class RelayDaemon:
     async def close(self) -> None:
         """Stop the IPC server, tear down QUIC connections, release the socket."""
         self._shutdown.set()
+        self._relay_connected.clear()
         if self._ipc_server is not None:
             await self._ipc_server.close()
             self._ipc_server = None
@@ -205,7 +230,33 @@ class RelayDaemon:
         """Block until ``close()`` is called (or ``shutdown()`` from elsewhere)."""
         await self._shutdown.wait()
 
-    # ---- relay control channel: AUTH + push handling ------------------------
+    # ---- relay control channel: connect / authenticate ----------------------
+
+    async def _connect_relay_once(self) -> None:
+        """Open + authenticate the relay control channel.
+
+        Idempotent: any stale routing entry for the relay's addr is dropped
+        first, so this method can be called both at startup and during
+        reconnect without leaking state.
+        """
+        assert self._endpoint is not None
+        relay_addr = (self._relay.host, self._relay.port)
+        # Drop any stale entry from a previous (failed) attempt.
+        self._endpoint.remove_connection(relay_addr)
+
+        self._relay_protocol = await self._endpoint.add_outgoing(
+            relay_addr,
+            build_quic_configuration(
+                is_client=True,
+                cert_path=self._cert_path,
+                key_path=self._key_path,
+            ),
+            stream_handler=self._on_relay_initiated_stream,
+        )
+        await asyncio.wait_for(self._relay_protocol.wait_connected(), timeout=10.0)
+        self._verify_relay_cert()
+        await self._authenticate_to_relay()
+        self._relay_connected.set()
 
     def _verify_relay_cert(self) -> None:
         """Compare relay's TLS-presented SPKI fingerprint to ``relays.yaml``."""
@@ -247,6 +298,72 @@ class RelayDaemon:
             ack.observed_port,
         )
 
+    # ---- supervisors ---------------------------------------------------------
+
+    async def _maintain_relay(self) -> None:
+        """Block on the live relay protocol; on drop, exponential-backoff reconnect.
+
+        First connection is owned by :meth:`start`, not this loop. The loop
+        starts in the "connected" state, watches for the protocol to die,
+        clears the connected flag, then attempts to reconnect.
+        """
+        backoff = RECONNECT_BACKOFF_INITIAL
+        while not self._shutdown.is_set():
+            # Wait for the current relay protocol to die.
+            if self._relay_protocol is not None:
+                try:
+                    await self._relay_protocol.wait_closed()
+                except asyncio.CancelledError:
+                    return
+            self._relay_connected.clear()
+            self._relay_protocol = None
+            if self._shutdown.is_set():
+                return
+            logger.warning("relay control channel dropped; reconnecting in %.1fs", backoff)
+            try:
+                await asyncio.sleep(backoff)
+            except asyncio.CancelledError:
+                return
+            try:
+                await self._connect_relay_once()
+                logger.info("relay control channel re-established")
+                backoff = RECONNECT_BACKOFF_INITIAL
+            except asyncio.CancelledError:
+                return
+            except Exception as exc:
+                logger.warning("reconnect attempt failed: %s", exc)
+                backoff = min(backoff * 2, RECONNECT_BACKOFF_MAX)
+
+    async def _keepalive_loop(self) -> None:
+        """Send a ``CONTROL_PING`` every :data:`KEEPALIVE_INTERVAL` seconds.
+
+        On reply timeout, close the relay protocol so the maintenance loop
+        notices and reconnects.
+        """
+        while not self._shutdown.is_set():
+            try:
+                await asyncio.sleep(KEEPALIVE_INTERVAL)
+            except asyncio.CancelledError:
+                return
+            if self._shutdown.is_set():
+                return
+            if not self._relay_connected.is_set() or self._relay_protocol is None:
+                continue
+            protocol = self._relay_protocol
+            try:
+                reader, writer = await protocol.create_stream()
+                await send_json(writer, MsgType.CONTROL_PING, None)
+                await asyncio.wait_for(recv_json(reader), timeout=KEEPALIVE_REPLY_TIMEOUT)
+                logger.debug("keepalive ping ok")
+            except asyncio.CancelledError:
+                return
+            except Exception as exc:
+                logger.warning("keepalive ping failed (%s); forcing reconnect", exc)
+                with contextlib.suppress(Exception):
+                    protocol.close()
+
+    # ---- relay-pushed streams ------------------------------------------------
+
     def _on_relay_initiated_stream(
         self,
         reader: asyncio.StreamReader,
@@ -276,7 +393,14 @@ class RelayDaemon:
             logger.warning("ignoring relay-pushed msg type %s", msg_type)
 
     async def _handle_incoming_punch_info(self, punch: PunchInfo) -> None:
-        """We're the listener for an inbound sync from ``punch.peer_*``."""
+        """We're the listener for an inbound sync from ``punch.peer_*``.
+
+        We *also* hole-punch from this side: a burst of magic UDP datagrams
+        toward the dialer's relay-observed addr primes **our** NAT so the
+        dialer's QUIC INITIAL is allowed back in. The relay sends
+        ``PUNCH_INFO`` to dialer and listener simultaneously, so both
+        bursts overlap and both pinholes open in time for the handshake.
+        """
         if punch.role != "listener":
             logger.warning("ignoring PUNCH_INFO with unexpected role %s", punch.role)
             return
@@ -287,7 +411,8 @@ class RelayDaemon:
                 punch.peer_fingerprint,
             )
             return
-        self._pending_dials[(punch.peer_host, punch.peer_port)] = _PendingDial(
+        peer_addr = (punch.peer_host, punch.peer_port)
+        self._pending_dials[peer_addr] = _PendingDial(
             peer_fingerprint=punch.peer_fingerprint,
             peer_id=peer_id,
         )
@@ -298,6 +423,15 @@ class RelayDaemon:
             punch.peer_host,
             punch.peer_port,
         )
+        # Fire the listener-side burst toward the dialer. Best-effort; if it
+        # fails (e.g. transient socket error) we still keep the pending dial
+        # registered — the dialer may still get through if their burst
+        # happened to win the race.
+        if self._endpoint is not None:
+            try:
+                await punch_via_endpoint(self._endpoint, peer_addr)
+            except Exception as exc:
+                logger.warning("listener-side punch burst failed: %s", exc)
 
     # ---- inbound peer-to-peer dials -----------------------------------------
 
@@ -369,10 +503,18 @@ class RelayDaemon:
                 return {"status": "error", "reason": f"bad request: {exc}"}
             return await self._do_sync_folder(request)
         if op == "status":
-            return {"status": "ok", "reason": "running"}
+            return {
+                "status": "ok",
+                "reason": "connected" if self._relay_connected.is_set() else "reconnecting",
+            }
         return {"status": "error", "reason": f"unknown op: {op!r}"}
 
     async def _do_sync_folder(self, request: SyncFolderRequest) -> dict[str, object]:
+        if not self._relay_connected.is_set():
+            return {
+                "status": "error",
+                "reason": "relay control channel is not currently connected; try again shortly",
+            }
         device = next(
             (d for d in self._state.devices.trusted_devices if d.id == request.peer_id),
             None,
@@ -414,11 +556,13 @@ class RelayDaemon:
 
     async def _run_outbound_sync(self, *, folder, peer_device) -> None:  # type: ignore[no-untyped-def]
         """CONNECT_REQUEST → PUNCH_INFO → open peer QUIC → PeerSession.as_source."""
-        assert self._relay_protocol is not None
+        if self._relay_protocol is None or not self._relay_connected.is_set():
+            raise RelayError("relay control channel is not connected")
         assert self._endpoint is not None
+        relay_protocol = self._relay_protocol
 
         # 1. CONNECT_REQUEST on the relay control channel.
-        req_reader, req_writer = await self._relay_protocol.create_stream()
+        req_reader, req_writer = await relay_protocol.create_stream()
         await send_json(
             req_writer,
             MsgType.CONNECT_REQUEST,
@@ -440,21 +584,12 @@ class RelayDaemon:
                 f"got {punch.peer_fingerprint}"
             )
 
-        # 2. Open a peer-to-peer QUIC connection over the SAME socket.
+        # 2. Hole-punch + open a peer-to-peer QUIC connection over the SAME
+        # socket (preserves the relay-observed NAT mapping). The burst opens
+        # the pinhole on both peers' NATs; the listener side burstings in
+        # parallel via _handle_incoming_punch_info.
         peer_addr = (punch.peer_host, punch.peer_port)
-        if peer_addr in self._endpoint._protocols_by_addr:
-            # Already connected to this peer (rare; means we initiated and
-            # are now initiating again or a prior session never tore down).
-            self._endpoint.remove_connection(peer_addr)
-        peer_protocol = await self._endpoint.add_outgoing(
-            peer_addr,
-            build_quic_configuration(
-                is_client=True,
-                cert_path=self._cert_path,
-                key_path=self._key_path,
-            ),
-        )
-        await asyncio.wait_for(peer_protocol.wait_connected(), timeout=15.0)
+        peer_protocol = await self._dial_peer_with_punch(peer_addr)
 
         # 3. Run source-side session on a fresh stream.
         sess_reader, sess_writer = await peer_protocol.create_stream()
@@ -476,6 +611,57 @@ class RelayDaemon:
             self._endpoint.remove_connection(peer_addr)
             peer_protocol.close()
 
+    async def _dial_peer_with_punch(
+        self,
+        peer_addr: tuple[str, int],
+    ) -> QuicConnectionProtocol:
+        """Burst-then-QUIC the peer-to-peer connection, retrying once on failure.
+
+        On real cone NATs neither side accepts inbound from the other until
+        each has sent at least one outbound datagram toward the other — so
+        we burst before the QUIC INITIAL leaves. A second attempt gives the
+        listener's NAT a second chance if the first burst arrived after the
+        listener's pinhole had closed (rare on healthy networks but cheap
+        insurance).
+        """
+        assert self._endpoint is not None
+        config = build_quic_configuration(
+            is_client=True,
+            cert_path=self._cert_path,
+            key_path=self._key_path,
+        )
+
+        last_error: BaseException | None = None
+        for attempt in range(1, PEER_DIAL_MAX_ATTEMPTS + 1):
+            # Always start each attempt with a clean routing entry.
+            self._endpoint.remove_connection(peer_addr)
+            try:
+                await punch_via_endpoint(self._endpoint, peer_addr)
+                peer_protocol = await self._endpoint.add_outgoing(peer_addr, config)
+                await asyncio.wait_for(
+                    peer_protocol.wait_connected(),
+                    timeout=PEER_DIAL_HANDSHAKE_TIMEOUT,
+                )
+                return peer_protocol
+            except (TimeoutError, ConnectionError, OSError) as exc:
+                last_error = exc
+                logger.warning(
+                    "peer dial attempt %d/%d to %s failed: %s",
+                    attempt,
+                    PEER_DIAL_MAX_ATTEMPTS,
+                    peer_addr,
+                    exc,
+                )
+                # Tear down the partially-attached protocol before retrying.
+                self._endpoint.remove_connection(peer_addr)
+                if attempt < PEER_DIAL_MAX_ATTEMPTS:
+                    await asyncio.sleep(PEER_DIAL_RETRY_DELAY)
+
+        raise HolePunchError(
+            f"peer dial to {peer_addr} failed after "
+            f"{PEER_DIAL_MAX_ATTEMPTS} attempts: {last_error}"
+        )
+
     # ---- helpers ------------------------------------------------------------
 
     def _device_id_for_fingerprint(self, fingerprint: str) -> str | None:
@@ -488,10 +674,6 @@ class RelayDaemon:
         task = asyncio.create_task(coro)  # type: ignore[arg-type]
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
-
-    @staticmethod
-    def _unused() -> IpcResponse:  # pragma: no cover - silences unused-import warning
-        return IpcResponse(status="ok")
 
 
 async def _wait_for_first_stream(
