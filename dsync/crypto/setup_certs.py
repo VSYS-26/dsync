@@ -14,7 +14,7 @@ def generate_self_signed_cert(cert_name: str = "cert.pem", key_name: str = "key.
     """Generates a self-signed X.509 certificate and a private RSA key.
 
     Creates the cryptographic identity for the P2P node.
-    By default, the certificate is issued in the name of "P2PNode" and is valid for 10 years.
+    By default, the certificate is issued in the name of "dsync-peer" and is valid for 10 years.
     Both the certificate and the private key are stored in unencrypted PEM format on the hard drive.
 
     Calculates the SHA-256 fingerprint of the public key and displays it on the console.
@@ -29,7 +29,7 @@ def generate_self_signed_cert(cert_name: str = "cert.pem", key_name: str = "key.
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
     # Build certificate
-    subject = issuer = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "P2P-Node")])
+    subject = issuer = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "dsync-peer")])
     cert = (
         x509.CertificateBuilder()
         .subject_name(subject)

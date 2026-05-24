@@ -1,16 +1,15 @@
-"""Direct peer-to-peer file-sync session over a hole-punched QUIC connection.
+"""Direct peer-to-peer file-sync session over a QUIC connection.
 
-``PeerSession`` is the QUIC analogue of the legacy ``P2PNode``: once both
-peers have established a direct QUIC connection (via the relay-brokered
-hole-punch from PR 4), they open a single bidirectional stream and run
-mutual authentication followed by a ``BackupSession``-driven file transfer.
+Once both peers have established a direct QUIC connection (typically via
+the relay-brokered hole-punch from :mod:`dsync.network.hole_punch`), they
+open a single bidirectional stream and run mutual authentication
+followed by a ``BackupSession``-driven file transfer.
 
-The session-level framing reuses the existing ``MsgType``/``async_send_msg``/
-``async_recv_msg`` primitives from ``p2p_core``. aioquic's per-stream
-StreamReader/StreamWriter are duck-compatible with ``asyncio``, so the
-existing ``send_file``/``recv_file`` and ``BackupSession`` code carries
-over to QUIC unchanged. (The legacy primitives will move into the new
-``quic_core`` module during the PR 7 cleanup.)
+The session-level framing uses the ``MsgType`` / ``async_send_msg`` /
+``async_recv_msg`` primitives from :mod:`dsync.network.quic_core`.
+aioquic's per-stream ``StreamReader`` / ``StreamWriter`` are
+duck-compatible with ``asyncio``, so the ``send_file`` / ``recv_file``
+and ``BackupSession`` modules work over QUIC unchanged.
 """
 
 from __future__ import annotations
@@ -21,11 +20,6 @@ from typing import TYPE_CHECKING
 
 from dsync.network.backup_direction import BackupSession, TransferRole
 from dsync.network.errors import PeerAuthError
-from dsync.network.p2p_core import (
-    MsgType,
-    async_recv_auth_msg,
-    async_send_msg,
-)
 from dsync.network.peer_auth import (
     extract_spki,
     fingerprint_from_spki,
@@ -35,7 +29,12 @@ from dsync.network.peer_auth import (
     unpack_auth_payload,
     verify_signature,
 )
-from dsync.network.quic_core import get_quic_channel_binding
+from dsync.network.quic_core import (
+    MsgType,
+    async_recv_auth_msg,
+    async_send_msg,
+    get_quic_channel_binding,
+)
 
 if TYPE_CHECKING:
     import asyncio

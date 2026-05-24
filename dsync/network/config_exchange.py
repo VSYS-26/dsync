@@ -10,7 +10,7 @@ import asyncio
 import yaml
 
 from dsync.config.folder import FoldersConfig
-from dsync.network.p2p_core import (
+from dsync.network.quic_core import (
     async_recv_config,
     async_recv_config_ack,
     async_send_config,

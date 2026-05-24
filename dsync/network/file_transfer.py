@@ -1,4 +1,4 @@
-"""Async file transfer over an authenticated asyncio TLS stream."""
+"""Async file transfer over an authenticated QUIC stream."""
 
 import asyncio
 from dataclasses import dataclass
@@ -13,7 +13,7 @@ from dsync.network.errors import (
     FrameValidationError,
     TransferIntegrityError,
 )
-from dsync.network.p2p_core import MsgType, async_recv_msg, async_send_msg
+from dsync.network.quic_core import MsgType, async_recv_msg, async_send_msg
 
 DEFAULT_CHUNK_SIZE = 64 * 1024
 MAX_META_SIZE = 8 * 1024

@@ -1,15 +1,20 @@
-"""QUIC transport primitives: TLS configuration, framing types, channel binding.
+"""QUIC transport primitives: TLS configuration, channel binding, framing.
 
-Replaces the TCP+TLS scaffolding in ``p2p_core.py`` for the upcoming
-relay+P2P architecture. Kept side-by-side with ``p2p_core.py`` until the
-legacy direct-connection code is removed (PR 7).
+The relay-control channel, the peer-to-peer data channel and every helper
+session in dsync ride on a QUIC stream and share the message-framing
+primitives in this module: a 1-byte ``MsgType`` tag followed by a 4-byte
+big-endian length and a body. The two channel-binding helpers
+(``CHANNEL_BINDING_LABEL``, ``get_quic_channel_binding``) derive the
+session-unique bytes both peers sign in their AUTH frame.
 """
 
 from __future__ import annotations
 
+import asyncio
 from enum import IntEnum
 import ssl
-from typing import TYPE_CHECKING, cast
+import struct
+from typing import TYPE_CHECKING, Final, cast
 
 from aioquic.quic.configuration import QuicConfiguration
 from aioquic.tls import hkdf_expand_label
@@ -30,6 +35,12 @@ CHANNEL_BINDING_LABEL = b"dsync-peer-auth-v1"
 #: Length of the channel-binding output in bytes. Both peers sign this value
 #: with their private key to prove they participate in this specific session.
 CHANNEL_BINDING_LENGTH = 32
+
+#: Upper bound for a CONFIG frame payload (64 KiB is generous for YAML config).
+MAX_CONFIG_SIZE: Final[int] = 64 * 1024
+
+#: SPKI || sig payload size for the AUTH frame (RSA-2048 SPKI 294 B + sig 256 B).
+_AUTH_PAYLOAD_SIZE: Final[int] = 550
 
 
 class MsgType(IntEnum):
@@ -55,6 +66,106 @@ class MsgType(IntEnum):
     CONNECT_REQUEST = 8
     PUNCH_INFO = 9
     ERROR = 10
+
+
+async def async_send_msg(
+    writer: asyncio.StreamWriter,
+    msg_type: int,
+    data: bytes,
+) -> None:
+    """Send a single framed message: ``[type:1][length:4 BE][body]``.
+
+    Works on any byte-stream writer (asyncio TCP or aioquic stream).
+    """
+    header = struct.pack("!BI", msg_type, len(data))
+    writer.write(header + data)
+    await writer.drain()
+
+
+async def async_recv_msg(
+    reader: asyncio.StreamReader,
+) -> tuple[int | None, bytes | None]:
+    """Read a single framed message. Returns ``(None, None)`` on clean EOF."""
+    try:
+        header = await reader.readexactly(5)
+    except asyncio.IncompleteReadError:
+        return None, None
+
+    msg_type, length = struct.unpack("!BI", header)
+    try:
+        data = await reader.readexactly(length)
+    except asyncio.IncompleteReadError as err:
+        raise RuntimeError("Connection lost during reception.") from err
+    return msg_type, data
+
+
+async def async_recv_auth_msg(reader: asyncio.StreamReader) -> bytes:
+    """Read an AUTH frame and return the 550-byte SPKI||signature payload.
+
+    Rejects wrong msg-type or size mismatch before any payload allocation.
+    """
+    try:
+        header = await reader.readexactly(5)
+    except asyncio.IncompleteReadError as err:
+        raise RuntimeError("Connection closed before auth message received.") from err
+
+    msg_type, length = struct.unpack("!BI", header)
+    if msg_type != MsgType.AUTH:
+        raise RuntimeError(
+            f"Expected auth message (type {MsgType.AUTH}), got type {msg_type}"
+        )
+    if length != _AUTH_PAYLOAD_SIZE:
+        raise RuntimeError(
+            f"Auth message wrong size: got {length} B, expected {_AUTH_PAYLOAD_SIZE} B"
+        )
+    try:
+        return await reader.readexactly(_AUTH_PAYLOAD_SIZE)
+    except asyncio.IncompleteReadError as err:
+        raise RuntimeError("Connection lost during auth message reception.") from err
+
+
+async def async_send_config(
+    writer: asyncio.StreamWriter,
+    config_data: bytes,
+) -> None:
+    """Send a CONFIG frame carrying serialized folder config (YAML bytes)."""
+    await async_send_msg(writer, MsgType.CONFIG, config_data)
+
+
+async def async_recv_config(reader: asyncio.StreamReader) -> bytes:
+    """Read a CONFIG frame; reject if oversize or wrong type before reading body."""
+    try:
+        header = await reader.readexactly(5)
+    except asyncio.IncompleteReadError as err:
+        raise RuntimeError("Connection closed before config received") from err
+
+    msg_type, length = struct.unpack("!BI", header)
+    if msg_type != MsgType.CONFIG:
+        raise RuntimeError(f"Expected CONFIG (type {MsgType.CONFIG}), got type {msg_type}")
+    if length > MAX_CONFIG_SIZE:
+        raise RuntimeError(
+            f"Config payload too large: {length} B exceeds limit of {MAX_CONFIG_SIZE} B"
+        )
+    try:
+        return await reader.readexactly(length)
+    except asyncio.IncompleteReadError as err:
+        raise RuntimeError("Connection lost during config reception") from err
+
+
+async def async_send_config_ack(writer: asyncio.StreamWriter) -> None:
+    """Send a zero-byte CONFIG_ACK frame."""
+    await async_send_msg(writer, MsgType.CONFIG_ACK, b"")
+
+
+async def async_recv_config_ack(reader: asyncio.StreamReader) -> None:
+    """Read a CONFIG_ACK frame, raising if a different type arrives."""
+    msg_type, _ = await async_recv_msg(reader)
+    if msg_type is None:
+        raise RuntimeError("Connection closed before config ack received")
+    if msg_type != MsgType.CONFIG_ACK:
+        raise RuntimeError(
+            f"Expected CONFIG_ACK (type {MsgType.CONFIG_ACK}), got type {msg_type}"
+        )
 
 
 def build_quic_configuration(
