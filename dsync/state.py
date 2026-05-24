@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from dsync.config import DevicesConfig, FoldersConfig
+from dsync.config import DevicesConfig, FoldersConfig, RelaysConfig
 
 
 @dataclass(frozen=True)
@@ -19,3 +19,4 @@ class AppState:
     config_dir: Path
     folders: FoldersConfig
     devices: DevicesConfig
+    relays: RelaysConfig

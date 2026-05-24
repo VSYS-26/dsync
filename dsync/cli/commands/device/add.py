@@ -8,14 +8,18 @@ import typer
 
 from dsync.cli.console import error, success
 from dsync.config import TrustedDevice
-from dsync.state import AppState
 from dsync.crypto import is_valid_fingerprint
+from dsync.state import AppState
 
 
 def add(
     ctx: typer.Context,
     id: Annotated[str, typer.Argument(help="Unique device id")],
     fingerprint: Annotated[str, typer.Argument(help="Device fingerprint")],
+    relay_id: Annotated[
+        str,
+        typer.Argument(help="Relay id (from relays.yaml) the device is reachable through"),
+    ],
 ) -> None:
     """Add a new device and persist it to devices.yaml."""
     state: AppState = ctx.obj
@@ -29,22 +33,28 @@ def add(
         raise typer.Exit(code=1)
 
     if not is_valid_fingerprint(fingerprint):
-        error(f"Fingerprint does not match expected format")
+        error("Fingerprint does not match expected format")
+        raise typer.Exit(code=1)
+
+    if not any(r.id == relay_id for r in state.relays.relays):
+        error(f"Relay '{relay_id}' is not listed in relays.yaml")
         raise typer.Exit(code=1)
 
     state.devices.trusted_devices.append(
         TrustedDevice(
             id=id,
-            fingerprint=fingerprint
+            fingerprint=fingerprint,
+            relay_id=relay_id,
         )
     )
 
     state.devices.save(state.config_dir, overwrite=True)
-    e = list(filter(lambda f: f.id == id, state.devices.trusted_devices))[0]
+    e = next(d for d in state.devices.trusted_devices if d.id == id)
     lines = [
         "Added device:",
         f"    • {e.id}",
-        f"      fingerprint:    {e.fingerprint}",
+        f"      fingerprint: {e.fingerprint}",
+        f"      relay_id:    {e.relay_id}",
     ]
 
     success("\n".join(lines))
