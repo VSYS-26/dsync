@@ -35,11 +35,32 @@ class DialerEndpoint:
 
 @dataclass
 class ListenerEndpoint:
-    """First accepted QUIC connection on the bound socket, plus the QuicServer host."""
+    """Bound listener socket + a Future that fires on the first accepted peer.
 
-    protocol: QuicConnectionProtocol
+    The endpoint is created once the UDP socket is bound and the QUIC server
+    is wired in. The first peer connection that arrives resolves ``accepted``;
+    caller awaits it to get the per-connection protocol object.
+    """
+
     server: QuicServer
     transport: asyncio.DatagramTransport
+    accepted: asyncio.Future[QuicConnectionProtocol]
+
+    @property
+    def protocol(self) -> QuicConnectionProtocol:
+        """The first accepted protocol. Caller must await ``accepted`` first."""
+        if not self.accepted.done():
+            raise RuntimeError("listener has not accepted a connection yet")
+        return self.accepted.result()
+
+    async def wait_accepted(
+        self,
+        timeout: float | None = None,
+    ) -> QuicConnectionProtocol:
+        """Block until the first peer arrives. Returns the accepted protocol."""
+        if timeout is None:
+            return await self.accepted
+        return await asyncio.wait_for(self.accepted, timeout=timeout)
 
 
 async def start_dialer(
@@ -88,31 +109,32 @@ async def start_listener(
     *,
     sock: _socket.socket,
     configuration: QuicConfiguration,
-    accept_timeout: float = 10.0,
     stream_handler: Any | None = None,
 ) -> ListenerEndpoint:
-    """Accept exactly one incoming QUIC connection on the bound socket.
+    """Bind a QUIC listener on the caller's socket; do not block on accept.
 
-    Internally hosts an ``aioquic.asyncio.server.QuicServer`` over the
-    caller-provided socket and resolves as soon as the first peer
-    connection appears. Subsequent peer connections to the same socket
-    will be dispatched but ignored by this helper — that scenario only
-    arises if the socket is later multiplexed with a relay-control
-    connection (PR 6+).
+    Returns as soon as the UDP socket is registered with the event loop and
+    the ``QuicServer`` is ready to dispatch incoming datagrams. The first
+    peer connection that arrives resolves ``endpoint.accepted``; the caller
+    awaits it (typically with a timeout) to drive the rest of the session.
+
+    This non-blocking shape is what lets the test/runtime spawn the listener
+    and the dialer in either order without a race window where the dialer's
+    INITIAL is sent before the listener is bound.
 
     Args:
         sock: A locally-bound UDP socket.
         configuration: Server-side ``QuicConfiguration``; ``is_client``
             must be ``False``.
-        accept_timeout: Seconds to wait for the first dialer to appear.
-        stream_handler: Optional aioquic stream handler forwarded to
-            each accepted connection.
+        stream_handler: Optional aioquic stream handler forwarded to each
+            accepted connection.
 
     Returns:
-        A ``ListenerEndpoint`` with the first accepted protocol.
+        A ``ListenerEndpoint`` that is bound but has not yet accepted any
+        peer. Use ``endpoint.wait_accepted(timeout=...)`` to block until a
+        peer arrives.
 
     Raises:
-        TimeoutError: If no peer connects within ``accept_timeout`` seconds.
         ValueError: If ``configuration.is_client`` is True.
     """
     if configuration.is_client:
@@ -138,10 +160,4 @@ async def start_listener(
         sock=sock,
     )
 
-    try:
-        protocol = await asyncio.wait_for(accepted, timeout=accept_timeout)
-    except TimeoutError:
-        transport.close()
-        raise
-
-    return ListenerEndpoint(protocol=protocol, server=server, transport=transport)
+    return ListenerEndpoint(server=server, transport=transport, accepted=accepted)

@@ -180,25 +180,21 @@ async def _one_attempt(
             raise
         return endpoint
 
-    # Listener path: start the server first so it can answer the INITIAL
+    # Listener path: bind the server first so it can answer the INITIAL
     # mid-burst, then send our own burst to open the local NAT mapping.
-    listener_task = asyncio.create_task(
-        start_listener(
+    try:
+        endpoint = await start_listener(
             sock=attempt_sock,
             configuration=configuration,
-            accept_timeout=handshake_timeout,
         )
-    )
-    try:
-        await _send_punch_burst(attempt_sock, peer_addr, burst_count, burst_interval)
-        endpoint = await listener_task
-    except TimeoutError:
-        listener_task.cancel()
+    except BaseException:
         attempt_sock.close()
         raise
-    except BaseException:
-        listener_task.cancel()
-        attempt_sock.close()
+    try:
+        await _send_punch_burst(attempt_sock, peer_addr, burst_count, burst_interval)
+        await endpoint.wait_accepted(timeout=handshake_timeout)
+    except TimeoutError:
+        endpoint.transport.close()
         raise
     try:
         await asyncio.wait_for(
