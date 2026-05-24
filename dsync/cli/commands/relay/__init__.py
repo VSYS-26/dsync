@@ -5,6 +5,7 @@ from __future__ import annotations
 import typer
 
 from .add import add
+from .connect import connect
 from .list import list
 from .mod import mod
 from .rm import rm
@@ -20,3 +21,4 @@ app.command()(add)
 app.command()(rm)
 app.command()(mod)
 app.command()(serve)
+app.command()(connect)

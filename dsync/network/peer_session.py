@@ -192,14 +192,20 @@ class PeerSession:
             files = _enumerate_folder_files(self._folder)
             logger.info("source sending %d file(s) to %s", len(files), peer_id)
             await backup.send_files(writer, files)
-            # Half-close so the receiver sees EOF and exits its loop.
+            # Half-close so the receiver sees EOF and exits its loop. Then
+            # block on the peer's EOF so the caller may safely close the
+            # underlying QUIC connection — without this round-trip the
+            # source can close before the last chunks have been delivered.
             writer.write_eof()
+            await reader.read()
         else:
             assert self._recv_dir is not None  # checked in __init__
             peer_dir = self._recv_dir / peer_id
             peer_dir.mkdir(parents=True, exist_ok=True)
             logger.info("peer receiving files from %s into %s", peer_id, peer_dir)
             await backup.receive_files(reader, peer_dir)
+            # Signal back to the source that all chunks have been processed.
+            writer.write_eof()
 
         return peer_id
 
