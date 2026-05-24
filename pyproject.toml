@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "aioquic>=1.2.0",
     "cryptography>=47.0.0",
     "pre-commit>=4.5.1",
     "pyp2p>=0.8.3",
@@ -16,6 +17,12 @@ dependencies = [
     "zeroconf>=0.148.0",
     "keyring>=25.7.0",
     "keyrings-alt>=5.0.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.24",
 ]
 
 [tool.ruff]
@@ -103,12 +110,17 @@ mypy_path = ["stubs"]
 
 [[tool.mypy.overrides]]
 module = [
+    "aioquic.*",
     "cryptography.*",
     "rich.*",
     "typer.*",
     "keyring.*",
 ]
 ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
 
 [tool.bandit]
 exclude_dirs = ["tests", ".venv"]
