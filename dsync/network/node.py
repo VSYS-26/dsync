@@ -279,7 +279,7 @@ class P2PNode:
             peer_dir.mkdir(parents=True, exist_ok=True)
             while True:
                 try:
-                    await recv_file(reader, writer, peer_dir)
+                    await recv_file(reader, peer_dir)
                 except asyncio.IncompleteReadError as e:
                     if e.partial:
                         raise
@@ -309,4 +309,4 @@ class P2PNode:
 
             print(f"[DEBUG] Sending {len(files_to_send)} file(s) from {folder_path}")
             for file_path in files_to_send:
-                await send_file(writer, reader, file_path)
+                await send_file(writer, file_path)
