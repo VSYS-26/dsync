@@ -19,8 +19,9 @@ from cryptography.hazmat.primitives.serialization import (
 from dsync.network.errors import PeerAuthError
 from dsync.network.file_transfer import recv_file, send_file
 from dsync.network.config_exchange import ConfigExchange
+from dsync.network.config_validation import validate_peer_folder_config
 from dsync.state import AppState
-from dsync.config import FolderEntry, FoldersConfig, SyncMode
+from dsync.config import FolderEntry, FoldersConfig
 
 from .p2p_core import (
     MsgType,
@@ -261,21 +262,16 @@ class P2PNode:
             # Server receives config first, validates modes
             received_config = await exchange.exchange_as_peer(reader, writer)
 
-            # Validate each folder config against local config
             for remote_entry in received_config.entries:
-                local_entry = next((e for e in self.state.folders.entries if e.id == remote_entry.id), None)
+                local_entry = next(
+                    (e for e in self.state.folders.entries if e.id == remote_entry.id),
+                    None,
+                )
                 if not local_entry:
-                    raise PeerAuthError(f"Peer wants to sync '{remote_entry.id}' but not configured locally")
-
-                # Mode compatibility check
-                if remote_entry.mode == SyncMode.MIRROR:
-                    if local_entry.mode != SyncMode.MIRROR:
-                        raise PeerAuthError(f"Mode mismatch for '{remote_entry.id}': peer has mirror, local has {local_entry.mode.value}")
-                elif remote_entry.mode == SyncMode.BACKUP_TO_PEER:
-                    if local_entry.mode != SyncMode.BACKUP_FROM_PEER:
-                        raise PeerAuthError(f"Mode mismatch for '{remote_entry.id}': peer backup-to-peer requires local backup-from-peer, but local is {local_entry.mode.value}")
-                elif remote_entry.mode == SyncMode.BACKUP_FROM_PEER:
-                    raise PeerAuthError(f"Peer attempted to send in backup-from-peer mode for '{remote_entry.id}' - invalid direction")
+                    raise PeerAuthError(
+                        f"Peer wants to sync '{remote_entry.id}' but not configured locally"
+                    )
+                validate_peer_folder_config(local_entry, remote_entry, peer_id)
 
             print(f"[+] Config validated for {len(received_config.entries)} folder(s)")
 
