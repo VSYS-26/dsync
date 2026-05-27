@@ -18,7 +18,9 @@ from cryptography.hazmat.primitives.serialization import (
 
 from dsync.network.errors import PeerAuthError
 from dsync.network.file_transfer import recv_file, send_file
+from dsync.network.config_exchange import ConfigExchange
 from dsync.state import AppState
+from dsync.config import FolderEntry, FoldersConfig, SyncMode
 
 from .p2p_core import (
     MsgType,
@@ -31,8 +33,6 @@ from .p2p_core import (
 
 _SPKI_SIZE = 294  # RSA-2048 SubjectPublicKeyInfo DER
 _SIG_SIZE = 256  # RSA-2048 PSS signature
-TEST_FILES = ("hello.txt", "sample.json", "icon.png")
-TEST_FILES_DIR = Path(__file__).resolve().parents[2] / "test-files-to-send"
 RECEIVED_DIR = Path(__file__).resolve().parents[2] / "received-files"
 
 
@@ -50,6 +50,7 @@ class P2PNode:
         cert_path: str,
         key_path: str,
         state: AppState,
+        folder: FolderEntry | None = None,
     ) -> None:
         """Initializes a new P2P node.
 
@@ -59,11 +60,13 @@ class P2PNode:
             cert_path (str): The file path to ones own TLS certificate (.pem).
             key_path (str): The file path to ones own private key (.pem).
             state (AppState): The global application runtime state containing configurations.
+            folder (FolderEntry): Optional folder configuration for sync (client only).
         """
         self.is_server = is_server
         self.cert_path = cert_path
         self.key_path = key_path
         self.state = state
+        self.folder = folder
 
         self.trusted_devices: dict[str, str] = {
             device.fingerprint: device.id for device in self.state.devices.trusted_devices
@@ -95,9 +98,9 @@ class P2PNode:
             """Print TLS handshake and background errors raised inside the event loop."""
             exc = context.get("exception")
             if isinstance(exc, ssl.SSLError):
-                print(f"\n[!] TLS Handshake failed: {exc.reason} ({exc})")
+                print(f"[!] TLS Handshake failed: {exc.reason} ({exc})")
             else:
-                print(f"\n[!] Background error: {context.get('message')}")
+                print(f"[!] Background error: {context.get('message')}")
 
         loop.set_exception_handler(custom_exception_handler)
 
@@ -200,11 +203,9 @@ class P2PNode:
 
             # Handshake
             if self.is_server:
-                print("[DEBUG] Server sending hello...")
                 await async_send_msg(
                     writer, MsgType.HELLO, b"Hello from server. Data sync can start."
                 )
-                print("[DEBUG] Server waiting for client reply...")
                 msg_type, answer = await async_recv_msg(reader)
                 if answer is None:
                     raise PeerAuthError("Client closed connection before handshake reply.")
@@ -214,7 +215,6 @@ class P2PNode:
                     )
                 print(f"[*] Message from client: {answer.decode('utf-8')}")
             else:
-                print("[DEBUG] Client waiting for hello...")
                 msg_type, msg = await async_recv_msg(reader)
                 if msg is None:
                     raise PeerAuthError("Server closed connection before handshake greeting.")
@@ -223,7 +223,6 @@ class P2PNode:
                         f"Expected hello (type {MsgType.HELLO}), got type {msg_type}"
                     )
                 print(f"[*] Message from server: {msg.decode('utf-8')}")
-                print("[DEBUG] Client sending reply...")
                 await async_send_msg(writer, MsgType.HELLO, b"Hello from client. I'm ready.")
 
             await self.start_sync(reader, writer, peer_id)
@@ -256,21 +255,62 @@ class P2PNode:
             peer_id: Verified trusted-device id of the remote peer. Used as
                 the per-client subdirectory name on the server side.
         """
+        exchange = ConfigExchange()
+
         if self.is_server:
+            # Server receives config first, validates modes
+            received_config = await exchange.exchange_as_peer(reader, writer)
+
+            # Validate each folder config against local config
+            for remote_entry in received_config.entries:
+                local_entry = next((e for e in self.state.folders.entries if e.id == remote_entry.id), None)
+                if not local_entry:
+                    raise PeerAuthError(f"Peer wants to sync '{remote_entry.id}' but not configured locally")
+
+                # Mode compatibility check
+                if remote_entry.mode == SyncMode.MIRROR:
+                    if local_entry.mode != SyncMode.MIRROR:
+                        raise PeerAuthError(f"Mode mismatch for '{remote_entry.id}': peer has mirror, local has {local_entry.mode.value}")
+                elif remote_entry.mode == SyncMode.BACKUP_TO_PEER:
+                    if local_entry.mode != SyncMode.BACKUP_FROM_PEER:
+                        raise PeerAuthError(f"Mode mismatch for '{remote_entry.id}': peer backup-to-peer requires local backup-from-peer, but local is {local_entry.mode.value}")
+                elif remote_entry.mode == SyncMode.BACKUP_FROM_PEER:
+                    raise PeerAuthError(f"Peer attempted to send in backup-from-peer mode for '{remote_entry.id}' - invalid direction")
+
+            print(f"[+] Config validated for {len(received_config.entries)} folder(s)")
+
             peer_dir = RECEIVED_DIR / peer_id
             peer_dir.mkdir(parents=True, exist_ok=True)
-            # TODO: future ticket — sender adds a folder/file id (from
-            # AppState.folders) to the meta frame. Receiver resolves
-            # id -> destination path via its own AppState.folders. Until
-            # then, every file lands flat in RECEIVED_DIR/<peer_id>.
             while True:
                 try:
-                    await recv_file(reader, peer_dir)
+                    await recv_file(reader, writer, peer_dir)
                 except asyncio.IncompleteReadError as e:
                     if e.partial:
                         raise
                     break
         else:
-            for name in TEST_FILES:
-                src = TEST_FILES_DIR / name
-                await send_file(writer, src)
+            # Client sends config first
+            if not self.folder:
+                raise ValueError("Client mode requires folder to be set")
+
+            config_to_send = FoldersConfig(entries=[self.folder])
+            await exchange.exchange_as_source(writer, reader, config_to_send)
+
+            folder_path = Path(self.folder.path)
+
+            if not folder_path.exists():
+                raise FileNotFoundError(f"Folder {folder_path} does not exist")
+
+            if not folder_path.is_dir():
+                raise NotADirectoryError(f"{folder_path} is not a directory")
+
+            files_to_send = list(folder_path.rglob("*")) if self.folder.recursive else list(folder_path.glob("*"))
+            files_to_send = [f for f in files_to_send if f.is_file()]
+
+            if not files_to_send:
+                print(f"[DEBUG] No files to send in {folder_path}")
+                return
+
+            print(f"[DEBUG] Sending {len(files_to_send)} file(s) from {folder_path}")
+            for file_path in files_to_send:
+                await send_file(writer, reader, file_path)

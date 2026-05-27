@@ -25,3 +25,5 @@
 #     path: /home/user/pictures
 #     mode: backup-from-peer
 #     # When devices is missing, then all trusted devices are used.
+#     # Set recursive to false to only sync files in the root of this folder, ignoring subfolders.
+#     recursive: false
