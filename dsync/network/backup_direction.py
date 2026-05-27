@@ -80,8 +80,10 @@ class BackupSession:
         """Open a backup session as the PEER (writes received data)."""
         return cls(TransferRole.PEER)
 
-    async def send_files(self, writer: asyncio.StreamWriter, files: tuple[Path, ...]) -> None:
-        """Send ``files`` to the peer.
+    async def send_files(
+        self, writer: asyncio.StreamWriter, files: tuple[Path, ...], root: Path
+    ) -> None:
+        """Send ``files`` to the peer with paths relativized against ``root``.
 
         Raises:
             DirectionViolationError: If this session is not the SOURCE.
@@ -93,7 +95,7 @@ class BackupSession:
                 "only the source may send (source → peer is the only legal direction)."
             )
         for src in files:
-            await send_file(writer, src)
+            await send_file(writer, src, root)
 
     async def receive_files(self, reader: asyncio.StreamReader, recv_dir: Path) -> None:
         """Receive files from the source into ``recv_dir`` until EOF.

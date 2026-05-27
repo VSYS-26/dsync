@@ -34,7 +34,6 @@ from .p2p_core import (
 
 _SPKI_SIZE = 294  # RSA-2048 SubjectPublicKeyInfo DER
 _SIG_SIZE = 256  # RSA-2048 PSS signature
-RECEIVED_DIR = Path(__file__).resolve().parents[2] / "received-files"
 
 
 class P2PNode:
@@ -262,24 +261,30 @@ class P2PNode:
             # Server receives config first, validates modes
             received_config = await exchange.exchange_as_peer(reader, writer)
 
-            for remote_entry in received_config.entries:
-                local_entry = next(
-                    (e for e in self.state.folders.entries if e.id == remote_entry.id),
-                    None,
+            if len(received_config.entries) != 1:
+                raise PeerAuthError(
+                    f"Expected exactly one folder per sync session, got "
+                    f"{len(received_config.entries)}"
                 )
-                if not local_entry:
-                    raise PeerAuthError(
-                        f"Peer wants to sync '{remote_entry.id}' but not configured locally"
-                    )
-                validate_peer_folder_config(local_entry, remote_entry, peer_id)
 
-            print(f"[+] Config validated for {len(received_config.entries)} folder(s)")
+            remote_entry = received_config.entries[0]
+            local_entry = next(
+                (e for e in self.state.folders.entries if e.id == remote_entry.id),
+                None,
+            )
+            if not local_entry:
+                raise PeerAuthError(
+                    f"Peer wants to sync '{remote_entry.id}' but not configured locally"
+                )
+            validate_peer_folder_config(local_entry, remote_entry, peer_id)
 
-            peer_dir = RECEIVED_DIR / peer_id
-            peer_dir.mkdir(parents=True, exist_ok=True)
+            print(f"[+] Config validated for folder '{local_entry.id}'")
+
+            dest_root = Path(local_entry.path)
+            dest_root.mkdir(parents=True, exist_ok=True)
             while True:
                 try:
-                    await recv_file(reader, peer_dir)
+                    await recv_file(reader, dest_root)
                 except asyncio.IncompleteReadError as e:
                     if e.partial:
                         raise
@@ -309,4 +314,4 @@ class P2PNode:
 
             print(f"[DEBUG] Sending {len(files_to_send)} file(s) from {folder_path}")
             for file_path in files_to_send:
-                await send_file(writer, file_path)
+                await send_file(writer, file_path, folder_path)
