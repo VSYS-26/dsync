@@ -18,8 +18,10 @@ from cryptography.hazmat.primitives.serialization import (
 
 from dsync.network.errors import PeerAuthError
 from dsync.network.file_transfer import recv_file, send_file
+from dsync.network.config_exchange import ConfigExchange
+from dsync.network.config_validation import validate_peer_folder_config
 from dsync.state import AppState
-from dsync.config import FolderEntry
+from dsync.config import FolderEntry, FoldersConfig
 
 from .p2p_core import (
     MsgType,
@@ -32,7 +34,6 @@ from .p2p_core import (
 
 _SPKI_SIZE = 294  # RSA-2048 SubjectPublicKeyInfo DER
 _SIG_SIZE = 256  # RSA-2048 PSS signature
-RECEIVED_DIR = Path(__file__).resolve().parents[2] / "received-files"
 
 
 class P2PNode:
@@ -97,9 +98,9 @@ class P2PNode:
             """Print TLS handshake and background errors raised inside the event loop."""
             exc = context.get("exception")
             if isinstance(exc, ssl.SSLError):
-                print(f"\n[!] TLS Handshake failed: {exc.reason} ({exc})")
+                print(f"[!] TLS Handshake failed: {exc.reason} ({exc})")
             else:
-                print(f"\n[!] Background error: {context.get('message')}")
+                print(f"[!] Background error: {context.get('message')}")
 
         loop.set_exception_handler(custom_exception_handler)
 
@@ -254,21 +255,48 @@ class P2PNode:
             peer_id: Verified trusted-device id of the remote peer. Used as
                 the per-client subdirectory name on the server side.
         """
+        exchange = ConfigExchange()
+
         if self.is_server:
-            peer_dir = RECEIVED_DIR / peer_id
-            peer_dir.mkdir(parents=True, exist_ok=True)
-            # TODO: future ticket — sender adds a folder/file id (from
-            # AppState.folders) to the meta frame. Receiver resolves
-            # id -> destination path via its own AppState.folders. Until
-            # then, every file lands flat in RECEIVED_DIR/<peer_id>.
+            # Server receives config first, validates modes
+            received_config = await exchange.exchange_as_peer(reader, writer)
+
+            if len(received_config.entries) != 1:
+                raise PeerAuthError(
+                    f"Expected exactly one folder per sync session, got "
+                    f"{len(received_config.entries)}"
+                )
+
+            remote_entry = received_config.entries[0]
+            local_entry = next(
+                (e for e in self.state.folders.entries if e.id == remote_entry.id),
+                None,
+            )
+            if not local_entry:
+                raise PeerAuthError(
+                    f"Peer wants to sync '{remote_entry.id}' but not configured locally"
+                )
+            validate_peer_folder_config(local_entry, remote_entry, peer_id)
+
+            print(f"[+] Config validated for folder '{local_entry.id}'")
+
+            dest_root = Path(local_entry.path)
+            dest_root.mkdir(parents=True, exist_ok=True)
             while True:
                 try:
-                    await recv_file(reader, writer, peer_dir)
+                    await recv_file(reader, writer, dest_root)
                 except asyncio.IncompleteReadError as e:
                     if e.partial:
                         raise
                     break
         else:
+            # Client sends config first
+            if not self.folder:
+                raise ValueError("Client mode requires folder to be set")
+
+            config_to_send = FoldersConfig(entries=[self.folder])
+            await exchange.exchange_as_source(writer, reader, config_to_send)
+
             folder_path = Path(self.folder.path)
 
             if not folder_path.exists():
@@ -286,4 +314,4 @@ class P2PNode:
 
             print(f"[DEBUG] Sending {len(files_to_send)} file(s) from {folder_path}")
             for file_path in files_to_send:
-                await send_file(writer, reader, file_path)
+                await send_file(writer, reader, file_path, folder_path)
