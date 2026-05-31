@@ -7,13 +7,12 @@
 ---
 
 ## Kontext
-
 Die Anwendung benötigt eine flexible und leicht anpassbare Konfiguration, die sowohl von Entwickler:innen als auch von technisch weniger versierten Nutzer:innen verstanden und bearbeitet werden kann.
 
- Ziel ist es, ein Format zu wählen, das:
+Ziel ist es, ein Format zu wählen, das:
 
- * gut lesbar ist
- * einfach erweitert werden kann
+* gut lesbar ist
+* einfach erweitert werden kann
 
 ## Entscheidung
 
