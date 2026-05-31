@@ -16,12 +16,13 @@ from cryptography.hazmat.primitives.serialization import (
     load_pem_private_key,
 )
 
+from dsync.config import FolderEntry, FoldersConfig, SyncMode
+from dsync.network.config_exchange import ConfigExchangeLegacy
 from dsync.network.errors import PeerAuthError
 from dsync.network.file_transfer import recv_file, send_file
 from dsync.network.config_exchange import ConfigExchange
 from dsync.network.config_validation import validate_peer_folder_config
 from dsync.state import AppState
-from dsync.config import FolderEntry, FoldersConfig
 
 from .p2p_core import (
     MsgType,
@@ -82,6 +83,8 @@ class P2PNode:
         self._own_spki: bytes = raw_key.public_key().public_bytes(
             Encoding.DER, PublicFormat.SubjectPublicKeyInfo
         )
+        own_fingerprint = hashlib.sha256(self._own_spki).hexdigest()
+        self._own_device_id = self.trusted_devices.get(own_fingerprint, own_fingerprint)
 
     async def start(self, host: str, port: int) -> None:
         """Starts the node as an async server or connects as an async client.
@@ -189,16 +192,16 @@ class P2PNode:
 
             fingerprint = hashlib.sha256(peer_spki).hexdigest()
             if fingerprint not in self.trusted_devices:
-                raise PeerAuthError(f"[-] Unknown device! Fingerprint: {fingerprint}")
+                raise PeerAuthError(f"[-] Unknown device! Fingerprint: {fingerprint}")  # noqa: TRY301
 
             peer_public_key = load_der_public_key(peer_spki)
             if not isinstance(peer_public_key, RSAPublicKey):
-                raise PeerAuthError("Peer cert must use RSA key")
+                raise PeerAuthError("Peer cert must use RSA key")  # noqa: TRY301
             self._verify_peer_signature(peer_public_key, channel_binding, peer_sig)
 
             peer_id = self.trusted_devices[fingerprint]
             if "/" in peer_id or "\\" in peer_id or peer_id in {".", ".."}:
-                raise PeerAuthError(f"Refusing path-unsafe peer id: {peer_id!r}")
+                raise PeerAuthError(f"Refusing path-unsafe peer id: {peer_id!r}")  # noqa: TRY301
             print(f"[+] Verified: {peer_id}")
 
             # Handshake
@@ -208,18 +211,18 @@ class P2PNode:
                 )
                 msg_type, answer = await async_recv_msg(reader)
                 if answer is None:
-                    raise PeerAuthError("Client closed connection before handshake reply.")
+                    raise PeerAuthError("Client closed connection before handshake reply.")  # noqa: TRY301
                 if msg_type != MsgType.HELLO:
-                    raise PeerAuthError(
+                    raise PeerAuthError(  # noqa: TRY301
                         f"Expected hello (type {MsgType.HELLO}), got type {msg_type}"
                     )
                 print(f"[*] Message from client: {answer.decode('utf-8')}")
             else:
                 msg_type, msg = await async_recv_msg(reader)
                 if msg is None:
-                    raise PeerAuthError("Server closed connection before handshake greeting.")
+                    raise PeerAuthError("Server closed connection before handshake greeting.")  # noqa: TRY301
                 if msg_type != MsgType.HELLO:
-                    raise PeerAuthError(
+                    raise PeerAuthError(  # noqa: TRY301
                         f"Expected hello (type {MsgType.HELLO}), got type {msg_type}"
                     )
                 print(f"[*] Message from server: {msg.decode('utf-8')}")
@@ -255,19 +258,21 @@ class P2PNode:
             peer_id: Verified trusted-device id of the remote peer. Used as
                 the per-client subdirectory name on the server side.
         """
-        exchange = ConfigExchange()
+        config_to_exchange = FoldersConfig(entries=[self.folder]) if self.folder else self.state.folders
+        exchange = ConfigExchange(config_to_exchange, self._own_device_id)
 
         if self.is_server:
-            # Server receives config first, validates modes
-            received_config = await exchange.exchange_as_peer(reader, writer)
+            peer_config = await exchange.exchange_and_validate(
+                writer, reader, peer_id, is_source=False
+            )
 
-            if len(received_config.entries) != 1:
+            if len(peer_config.entries) != 1:
                 raise PeerAuthError(
                     f"Expected exactly one folder per sync session, got "
-                    f"{len(received_config.entries)}"
+                    f"{len(peer_config.entries)}"
                 )
 
-            remote_entry = received_config.entries[0]
+            remote_entry = peer_config.entries[0]
             local_entry = next(
                 (e for e in self.state.folders.entries if e.id == remote_entry.id),
                 None,
@@ -284,28 +289,26 @@ class P2PNode:
             dest_root.mkdir(parents=True, exist_ok=True)
             while True:
                 try:
-                    await recv_file(reader, dest_root)
+                    await recv_file(reader, writer, dest_root)
                 except asyncio.IncompleteReadError as e:
                     if e.partial:
                         raise
                     break
         else:
-            # Client sends config first
             if not self.folder:
                 raise ValueError("Client mode requires folder to be set")
 
-            config_to_send = FoldersConfig(entries=[self.folder])
-            await exchange.exchange_as_source(writer, reader, config_to_send)
+            await exchange.exchange_and_validate(writer, reader, peer_id, is_source=True)
 
             folder_path = Path(self.folder.path)
-
-            if not folder_path.exists():
-                raise FileNotFoundError(f"Folder {folder_path} does not exist")
-
             if not folder_path.is_dir():
                 raise NotADirectoryError(f"{folder_path} is not a directory")
 
-            files_to_send = list(folder_path.rglob("*")) if self.folder.recursive else list(folder_path.glob("*"))
+            files_to_send = (
+                list(folder_path.rglob("*"))
+                if self.folder.recursive
+                else list(folder_path.glob("*"))
+            )
             files_to_send = [f for f in files_to_send if f.is_file()]
 
             if not files_to_send:
@@ -314,4 +317,4 @@ class P2PNode:
 
             print(f"[DEBUG] Sending {len(files_to_send)} file(s) from {folder_path}")
             for file_path in files_to_send:
-                await send_file(writer, file_path, folder_path)
+                await send_file(writer, reader, file_path, folder_path)

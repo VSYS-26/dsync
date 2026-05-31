@@ -1,0 +1,5422 @@
+Directory structure:
+└── dsync/
+    ├── README.md
+    ├── properdocs.yml
+    ├── pyproject.toml
+    ├── .pre-commit-config.yaml
+    ├── .python-version
+    ├── docs/
+    │   ├── index.md
+    │   ├── adrs/
+    │   │   ├── ADR-###-Template.md
+    │   │   ├── ADR-001-YAML.md
+    │   │   ├── ADR-002-Handshake.md
+    │   │   └── index.md
+    │   ├── conventions/
+    │   │   ├── branching-model.md
+    │   │   ├── cli.md
+    │   │   ├── index.md
+    │   │   └── setup.md
+    │   ├── meetings/
+    │   │   ├── index.md
+    │   │   └── Meetings Nodes.md
+    │   └── research/
+    │       ├── index.md
+    │       ├── Konfiguration-Ordner-Dateien.md
+    │       ├── VSYS26T2-27.md
+    │       ├── VSYS26T2-33.md
+    │       └── VSYS26T2-37.md
+    ├── dsync/
+    │   ├── __init__.py
+    │   ├── generate_test_certs.py
+    │   ├── identity.py
+    │   ├── integrity.py
+    │   ├── main.py
+    │   ├── state.py
+    │   ├── .gitkeep
+    │   ├── cli/
+    │   │   ├── __init__.py
+    │   │   ├── console.py
+    │   │   ├── callbacks/
+    │   │   │   ├── __init__.py
+    │   │   │   └── config_dir.py
+    │   │   └── commands/
+    │   │       ├── __init__.py
+    │   │       ├── _hello.py
+    │   │       ├── _demo/
+    │   │       │   ├── __init__.py
+    │   │       │   ├── add.py
+    │   │       │   └── list.py
+    │   │       ├── device/
+    │   │       │   ├── __init__.py
+    │   │       │   ├── add.py
+    │   │       │   ├── list.py
+    │   │       │   ├── mod.py
+    │   │       │   └── rm.py
+    │   │       ├── folder/
+    │   │       │   ├── __init__.py
+    │   │       │   ├── add.py
+    │   │       │   ├── list.py
+    │   │       │   ├── mod.py
+    │   │       │   └── rm.py
+    │   │       ├── peer/
+    │   │       │   ├── __init__.py
+    │   │       │   ├── announce.py
+    │   │       │   ├── discover.py
+    │   │       │   └── map.py
+    │   │       └── sync/
+    │   │           ├── __init__.py
+    │   │           ├── run_backup.py
+    │   │           └── start.py
+    │   ├── config/
+    │   │   ├── __init__.py
+    │   │   ├── _base.py
+    │   │   ├── device.py
+    │   │   └── folder.py
+    │   ├── crypto/
+    │   │   ├── __init__.py
+    │   │   ├── keys.py
+    │   │   ├── secure_storage.py
+    │   │   └── setup_certs.py
+    │   └── network/
+    │       ├── __init__.py
+    │       ├── _start_peer.py
+    │       ├── backup_direction.py
+    │       ├── config_exchange.py
+    │       ├── discovery.py
+    │       ├── errors.py
+    │       ├── file_transfer.py
+    │       ├── node.py
+    │       └── p2p_core.py
+    ├── dsync-config/
+    │   ├── devices.yaml
+    │   └── folders.yaml
+    ├── scripts/
+    │   └── validate_commit_msg.py
+    ├── stubs/
+    │   ├── keyring.pyi
+    │   ├── zeroconf.pyi
+    │   └── keyring/
+    │       └── errors.pyi
+    ├── test-files-to-send/
+    │   ├── hello.txt
+    │   └── sample.json
+    ├── tests/
+    │   └── .gitkeep
+    └── .github/
+        └── workflows/
+            └── deploy-mkdocs.yml
+
+================================================
+FILE: README.md
+================================================
+# dsync
+
+Decentralized file and folder sync between trusted devices - no central server.
+
+A proof-of-concept developed as part of a university project in the course **Distributed Systems**.
+
+---
+
+## Idea
+
+Most file sync solutions rely on a central server or cloud service. This project explores a different approach: devices sync directly with each other, without any intermediary.
+
+Trust between devices is established explicitly and manually. There is no automatic pairing, no account system, and no central coordinator.
+
+---
+
+## Goals
+
+- Sync files and folders directly between trusted devices
+- Support two modes: keeping devices in sync (mirror) and backing up to another device
+- Keep the design simple and easy to reason about
+
+---
+
+## Status
+
+Work in progress - early proof-of-concept stage.
+
+---
+
+## Development Setup
+
+This project uses [uv](https://docs.astral.sh/uv/) for fast Python dependency management and virtual environments.
+
+### Prerequisites
+
+- [Install uv](https://docs.astral.sh/uv/getting-started/installation/)
+
+### Installation
+
+1. Clone the repository and navigate into the project directory.
+2. Sync the project (this automatically creates a virtual environment in `.venv/` and installs all required dependencies):
+   ```bash
+   uv sync
+   ```
+
+### UV commands
+
+- run a python script
+  ```bash
+  uv run dsync/main.py
+  ```
+
+- add a library
+  ```bash
+  uv add library_name
+  ```
+
+- install and run checks
+  ```bash
+  uv run pre-commit install
+  uv run pre-commit install --hook-type commit-msg
+  uv run pre-commit run --all-files
+  ```
+
+---
+
+## Standards and Tooling
+
+### Python standards
+
+- PEP 8: baseline style, naming, indentation, and structure
+- PEP 257: docstring conventions (Google style via Ruff)
+- PEP 484: static typing and type-hint checks (mypy strict mode)
+
+### Git standards
+
+- Conventional Commits for commit messages:
+  https://www.conventionalcommits.org/
+- Commit messages are validated automatically through a `commit-msg` pre-commit hook.
+
+### Enforced checks (pre-commit on each commit)
+
+- Ruff: linting, formatting, import sorting, auto-fixes, docstring checks
+- mypy: static type checking
+- Bandit: security scanning (secrets, weak crypto, insecure patterns)
+
+---
+
+## Testing locally
+
+To test the peer-to-peer connection on your local machine, you need to simulate two devices communicating directly. This requires two separate terminal windows.
+
+#### **1. Generate Certificates & Setup Trust**
+
+Before two peers can communicate, they need their cryptographic identities.
+
+   1. Generate a self-signed certificate and private key for your local test. The script/command will output a SHA-256 fingerprint for the public key.
+   (Note: Since both local nodes will run in the same directory, they will share this certificate to authenticate each other during the local test).
+   2. Create or edit the configuration file at dsync-config/devices.yaml.
+   3. Add the generated fingerprint to this file to authorize the connection (Mutual TLS authentication):
+   ```yaml
+   trusted_devices:
+      - id: local-test-node
+        fingerprint: "YOUR_GENERATED_FINGERPRINT_HASH_HERE"
+   ```
+#### **2. Run the two Terminals**
+
+Open two separate terminals in the root directory of the project.
+
+**Terminal 1: Start Node A (Server mode)**
+
+This node opens a local port (default 9999) and waits for a trusted partner to connect.
+```bash
+uv run python -m dsync.main sync start --mode server
+```
+
+**Terminal 2: Start Node B (Client mode)**
+
+This node connects directly to the local server and initiates the Mutual TLS handshake and sync process.
+```bash
+uv run python -m dsync.main sync start --mode client
+```
+
+If everything is configured correctly, you will see the Mutual TLS verification succeed and the nodes exchanging their file hashes.
+
+
+
+================================================
+FILE: properdocs.yml
+================================================
+site_name: DSync
+nav:
+  - Startseite: index.md
+  - ADRs:
+      - adrs/index.md
+      - Vorlage: adrs/ADR-###-Template.md
+      - ADRS:
+        - ADR-001: adrs/ADR-001-YAML.md
+  - Konventionen:
+      - conventions/index.md
+      - Verzweigungsmodell: conventions/branching-model.md
+      - CLI: conventions/cli.md
+      - Setup: conventions/setup.md
+  - Besprechungen:
+      - meetings/index.md
+      - Protokoll – 18.04.2026: meetings/Meetings Nodes.md
+  - Recherche:
+      - research/index.md
+      - Geräteidentifikation: research/VSYS26T2-27.md
+
+theme:
+  name: material
+  palette:
+    - scheme: slate
+      primary: purple
+      accent: deep-purple
+      toggle:
+        icon: material/weather-sunny
+        name: Light mode
+    - scheme: default
+      primary: blue
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Dark mode
+
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - content.code.copy
+    - content.action.edit
+
+plugins:
+  - mike
+  - search
+  - literate-nav
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_source: true
+
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - pymdownx.superfences
+  - pymdownx.snippets
+
+extra_javascript:
+  - https://unpkg.com/mermaid/dist/mermaid.min.js
+  - https://unpkg.com/katex@0/dist/katex.min.js
+  - https://unpkg.com/katex@0/dist/auto-render.min.js
+
+
+================================================
+FILE: pyproject.toml
+================================================
+[project]
+name = "dsync"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "cryptography>=47.0.0",
+    "pre-commit>=4.5.1",
+    "pyp2p>=0.8.3",
+    "pydantic>=2.10",
+    "pyyaml>=6.0.2",
+    "rich>=15.0.0",
+    "ruff>=0.6.0",
+    "typer>=0.24.1",
+    "zeroconf>=0.148.0",
+    "keyring>=25.7.0",
+    "keyrings-alt>=5.0.2",
+]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "A",
+    "DOC",
+    "D",
+    "E",
+    "W",
+    "F",
+    "I",
+    "N",
+    "UP",
+    "FA",
+    "TC",
+    "PTH",
+    "B",
+    "DTZ",
+    "EM",
+    "ISC",
+    "ICN",
+    "PIE",
+    "PT",
+    "Q",
+    "RSE",
+    "RET",
+    "SIM",
+    "TID",
+    "ARG",
+    "ERA",
+    "PGH",
+    "TRY",
+    "RUF",
+]
+ignore = [
+    "E501",
+    "PLR0913",
+    "PLR2004",
+    "TRY003",
+    "EM101",
+    "EM102",
+]
+task-tags = ["TODO", "FIXME"]
+
+[tool.ruff.lint.isort]
+force-sort-within-sections = true
+combine-as-imports = true
+force-single-line = false
+split-on-trailing-comma = true
+
+[tool.ruff.lint.mccabe]
+max-complexity = 17
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "lf"
+
+[tool.ruff.lint.pylint]
+max-args = 10
+max-branches = 20
+max-returns = 8
+max-statements = 90
+
+[tool.ruff.lint.flake8-quotes]
+inline-quotes = "double"
+multiline-quotes = "double"
+docstring-quotes = "double"
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+pretty = true
+show_error_codes = true
+warn_unreachable = true
+exclude = ["^tests/"]
+mypy_path = ["stubs"]
+
+[[tool.mypy.overrides]]
+module = [
+    "cryptography.*",
+    "rich.*",
+    "typer.*",
+    "keyring.*",
+]
+ignore_missing_imports = true
+
+[tool.bandit]
+exclude_dirs = ["tests", ".venv"]
+skips = ["B101"]
+
+
+
+================================================
+FILE: .pre-commit-config.yaml
+================================================
+default_stages: [pre-commit]
+
+repos:
+- repo: https://github.com/astral-sh/ruff-pre-commit
+  rev: v0.15.11
+  hooks:
+    - id: ruff-check
+      args: [--fix, --exit-non-zero-on-fix]
+    - id: ruff-format
+
+- repo: https://github.com/pre-commit/mirrors-mypy
+  rev: v1.20.1
+  hooks:
+    - id: mypy
+      args: [--config-file=pyproject.toml]
+      additional_dependencies: [typer>=0.24.1, rich>=15.0.0, cryptography>=45.0.0, pyyaml>=6.0.2, types-pyyaml>=6.0.12, pydantic>=2.10]
+
+- repo: https://github.com/PyCQA/bandit
+  rev: 1.9.4
+  hooks:
+    - id: bandit
+      args: [-c, pyproject.toml, -r, dsync]
+
+- repo: local
+  hooks:
+    - id: conventional-commits
+      name: conventional-commits
+      entry: python scripts/validate_commit_msg.py
+      language: python
+      stages: [commit-msg]
+
+
+
+================================================
+FILE: .python-version
+================================================
+3.13
+
+
+
+================================================
+FILE: docs/index.md
+================================================
+# DSync
+
+DSync ist ein dezentrales Projekt zur Synchronisierung von Dateien und Ordnern zwischen vertrauenswürdigen Geräten.
+
+## Was hier zu finden ist
+
+- Architekturnotizen und Entscheidungen in den ADRs
+- Arbeitskonventionen für das Projekt
+- Besprechungsnotizen und Forschungsmaterial
+
+## Hier starten
+
+- [Architekturentscheidungen](adrs/)
+- [Konventionen](conventions/)
+- [Besprechungsnotizen](meetings/)
+- [Forschung](research/)
+
+
+
+================================================
+FILE: docs/adrs/ADR-###-Template.md
+================================================
+# ADR-[NUMMER]: [Titel der Entscheidung]
+
+- **Datum:** YYYY-MM-DD
+- **Status:** `Vorgeschlagen` | `Akzeptiert` | `Abgelehnt` | `Ersetzt durch ADR-[X]`
+- **Erstellt von:** [Name]
+
+---
+
+## Kontext
+
+> Welches Problem oder welche Situation hat diese Entscheidung notwendig gemacht?
+> Kurze, sachliche Beschreibung des Ausgangszustands.
+
+## Entscheidung
+
+> Was wurde entschieden?
+> Die Entscheidung klar und direkt formulieren – ohne Begründung.
+
+## Begründung
+
+> Warum wurde diese Entscheidung so getroffen?
+> Welche Alternativen wurden in Betracht gezogen und warum wurden sie verworfen?
+
+### Betrachtete Alternativen
+
+| Alternative | Begründung für Ablehnung |
+|---|---|
+| Alternative A | … |
+| Alternative B | … |
+
+## Konsequenzen
+
+> Welche Auswirkungen hat diese Entscheidung – positiv wie negativ?
+
+### Positiv
+- …
+
+### Negativ / Trade-offs
+- …
+
+## Referenzen
+
+- [Link zu Ticket, Dokument oder weiterführender Quelle]
+
+
+================================================
+FILE: docs/adrs/ADR-001-YAML.md
+================================================
+# ADR-001: YAML für die Konfiguration
+
+- **Datum:** 2026-04-18
+- **Status:** `Akzeptiert`
+- **Erstellt von:** Janis E.
+
+---
+
+## Kontext
+
+Die Anwendung benötigt eine flexible und leicht anpassbare Konfiguration, die sowohl von Entwickler:innen als auch von technisch weniger versierten Nutzer:innen verstanden und bearbeitet werden kann.
+
+ Ziel ist es, ein Format zu wählen, das:
+
+ * gut lesbar ist
+ * einfach erweitert werden kann
+
+## Entscheidung
+
+Für die Konfiguration der Anwendung wird YAML als Standardformat verwendet.
+
+## Begründung
+
+YAML bietet eine sehr gute Balance zwischen Lesbarkeit und Ausdrucksstärke. Durch die reduzierte Syntax und die Möglichkeit, verschachtelte Strukturen übersichtlich darzustellen, eignet es sich besonders gut für Konfigurationsdateien.
+
+Im Vergleich zu anderen Formaten ist YAML weniger "visuell laut" (keine vielen Klammern oder Anführungszeichen) und dadurch einfacher zu erfassen - gerade bei komplexeren Konfigurationen.
+
+Zusätzlich wird YAML von vielen Tools im Ökosystem bereits unterstützt (z.B. CI/CD-Pipelines wie GitHub Actions oder Konfigurationssysteme wie Kubernetes), was die Integration erleichtert und den Lernaufwand reduziert.
+
+### Betrachtete Alternativen
+
+| Alternative | Begründung für Ablehnung                                                                                                             |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| JSON        | Strengere Syntax (z.B. Pflicht für Anführungszeichen, keine Kommentare), dadurch weniger benutzerfreundlich für manuelle Bearbeitung |
+| TOML        | Zwar lesbar, aber weniger verbreitet im bestehenden Tooling und weniger flexibel bei komplex verschachtelten Strukturen              |
+| XML         | Sehr verbose und schwer lesbar, ungeeignet für einfache Konfigurationszwecke                                                         |
+
+## Konsequenzen
+
+### Positiv
+
+- Gute Lesbarkeit auch für größere Konfigurationsdateien
+- Einfache manuelle Bearbeitung ohne spezielle Tools
+- Unterstützung von Kommentaren direkt in der Datei
+- Weit verbreitet in modernen DevOps- und Infrastruktur-Tools
+- Gut geeignet für verschachtelte und strukturierte Daten
+
+### Negativ / Trade-offs
+
+- Einrückungsbasierte Syntax kann zu Fehlern führen (Whitespace-sensitiv)
+- Parsing kann komplexer sein als bei einfacheren Formaten wie JSON
+- Unterschiedliche YAML-Versionen können zu Inkonsistenzen führen
+- Weniger strikt → Fehler werden teilweise erst zur Laufzeit erkannt
+
+---
+
+## Referenzen
+
+* [Research Ticket](https://kp2-jira.in.htwg-konstanz.de/browse/VSYS26T2-29)
+
+
+
+================================================
+FILE: docs/adrs/ADR-002-Handshake.md
+================================================
+# ADR-002: Lokal Discovery & Handshake
+
+- **Datum:** 2026-04-21
+- **Status:** `Vorgeschlagen`
+- **Erstellt von:** Janis E.
+
+---
+
+## Kontext
+
+Als Nutzer möchte ich vertrauenswürdige Geräte/Peers registrieren und verwalten können, ohne Nutzerkonten anlegen zu müssen. Vertrauenswürdige Geräte sollen jederzeit hinzugefügt oder entfernt werden können. Basierend auf dieser Registrierung soll eine sichere Verbindung zu den Peers möglich sein, ohne dass feste IP-Adressen erforderlich sind.
+
+**Akzeptanzkriterien:**
+1. Keine Anlegung von Nutzerkonten erforderlich (keine persönlichen Daten wie E-Mail)
+2. Mehrere Geräte können als vertrauenswürdig registriert werden
+3. Registrierte Geräte können jederzeit entfernt werden
+4. Basierend auf der Registrierung sind sichere Verbindungen möglich
+
+## Entscheidung
+
+Implementierung eines zwei-phasigen Ansatzes:
+
+1. **Broadcast-Phase**: Clients versenden periodisch ihren Fingerprint per Broadcast/Multicast ins lokale Netz. Empfänger extrahieren die Absender-IP aus dem UDP-Paket und speichern die Zuordnung `Fingerprint → IP` lokal ab.
+2. **Handshake-Phase**: Beim Verbindungsaufbau findet ein Public-Key-Austausch statt, gefolgt von beidseitiger Fingerprint-Verifikation. Nur wenn beide Seiten positive Verifikation bestätigen, wird die Verbindung aufgebaut.
+
+## Begründung
+
+Dieser dezentralisierte Ansatz ermöglicht:
+- **Keine Nutzerkonten erforderlich**: Geräte werden direkt über ihre Fingerprints identifiziert und verwaltet
+- **Einfache Peer-Verwaltung**: Vertrauenswürdige Geräte können über eine lokale Registrierung ohne zentrale Infrastruktur verwaltet werden
+- **Dynamische IP-Verwaltung**: Keine festen IP-Adressen erforderlich – Geräte werden durch Fingerprints identifiziert
+- **Gegenseitige Authentifizierung** durch Fingerprint-Verifikation basierend auf Public Keys
+- **Sicherheit durch Trust-by-Verification**: Verbindungen sind nur zu registrierten Peers möglich
+- **Skalierbarkeit** im lokalen Netz ohne Single-Point-of-Failure
+
+### Betrachtete Alternativen
+
+| Alternative | Begründung für Ablehnung |
+|---|---|
+| Nur Fingerprint-basierte Zuordnung ohne Public-Key-Austausch | Unzureichende Sicherheit, keine Forward-Secrecy, anfällig für Man-in-the-Middle-Attacken |
+| Einseitiges Vertrauensmodell | Asymmetrisches Sicherheitsmodell, höheres Risiko bei Gerätekompromittierung |
+
+## Konsequenzen
+
+### Positiv
+- Dezentralisierte Architektur ohne externe Abhängigkeiten
+- **Keine festen IP-Adressen erforderlich** – Geräte können sich frei im Netz bewegen
+- Gegenseitige Authentifizierung erhöht Sicherheit
+- Geringe Latenz durch direkten TCP-Verbindungsaufbau nach Entdeckung
+- Einfache Trust-Verwaltung: nur vertrauenswürdige Fingerprints akzeptieren
+
+### Negativ / Trade-offs
+- Periodische Broadcasts können zu erhöhtem Netzwerk-Traffic führen
+- Discovery-Tabelle muss in Speicher verwaltet werden (bei vielen Geräten)
+- Abhängig von Broadcast/Multicast-Unterstützung im Netzwerk
+- Port-Management erforderlich (Standardport festlegen oder im Broadcast übertragen)
+- Vertrauenswürdige Fingerprints müssen vorab bereitgestellt werden
+
+## Detaillierte Spezifikation
+
+### Broadcast
+
+**Kurzfassung:** Clients verschicken ihren Fingerprint im Intervall ins Netz. Empfänger lesen die Absender-IP aus der Nachricht und speichern jede eingehende Zuordnung `Fingerprint → IP` lokal ab.
+
+Jeder Client sendet in einem festen Intervall eine Broadcast-/Multicast-Nachricht mit seinem Fingerprint ins lokale Netz. Empfänger lesen die Absender-IP aus dem UDP-Paket und speichern die Zuordnung `Fingerprint → IP` in einer Discovery-Tabelle – unabhängig davon, ob der Fingerprint bereits als vertrauenswürdig bekannt ist. Die Trust-Prüfung findet erst beim Verbindungsaufbau statt.
+
+*Hinweis: Port sollte entweder im Broadcast mitgesendet oder als Standardport festgelegt werden (erforderlich für Verbindungsaufbau).*
+
+### Verbindung aufbauen (Handshake)
+
+**Kurzfassung:**
+- Beim Verbindungsaufbau tauschen beide Partner ihre Public Keys aus.
+- Aus den empfangenen Public Keys wird jeweils der Fingerprint berechnet und mit den lokal hinterlegten Fingerprints vertrauenswürdiger Geräte abgeglichen.
+- Nur wenn die Fingerprints auf beiden Seiten einem vertrauenswürdigen Gerät entsprechen, wird die Verbindung aufgebaut.
+
+**Im Detail:**
+
+1. Peer A ermittelt die aktuelle IP von Peer B aus der Discovery-Tabelle (anhand des Fingerprints).
+2. Peer A baut eine TCP-Verbindung zu dieser IP auf.
+3. Beide Partner tauschen ihre Public Keys aus.
+4. Beidseitige Fingerprint-Verifikation: Jede Seite berechnet den Fingerprint des empfangenen Public Keys und vergleicht ihn mit dem lokal gespeicherten, vertrauenswürdigen Fingerprint der Gegenseite.
+5. Nur wenn **beide** Seiten ein positives Ergebnis haben, gilt die Gegenseite als authentifiziert und die Nutzdaten werden anschließend mit dem Public Key des Empfängers verschlüsselt.
+
+### Ablaufdiagramm
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant A as Peer A
+    participant Net as Lokales Netz
+    participant B as Peer B
+
+    Note over A,B: Phase 1 – Broadcast (periodisch)
+
+    A->>Net: Broadcast { Fingerprint_A }
+    Net->>B: Broadcast empfangen (Absender-IP = IP_A)
+    B->>B: speichere Fingerprint_A → IP_A
+
+    B->>Net: Broadcast { Fingerprint_B }
+    Net->>A: Broadcast empfangen (Absender-IP = IP_B)
+    A->>A: speichere Fingerprint_B → IP_B
+
+    Note over A,B: Phase 2 – Verbindungsaufbau & Handshake
+
+    A->>B: TCP-Connect zu IP_B
+    A->>B: PublicKey_A
+    B->>A: PublicKey_B
+
+    A->>A: Hash(PublicKey_B) == Fingerprint_B ?
+    B->>B: Hash(PublicKey_A) == Fingerprint_A ?
+
+    alt beide Fingerprints gültig
+        Note over A,B: Phase 3 – Kommunikation
+    else Verifikation fehlgeschlagen
+        A--xB: Verbindung abbrechen
+    end
+```
+
+
+================================================
+FILE: docs/adrs/index.md
+================================================
+# ADRs
+
+Hier stehen die Architekturentscheidungen des Projekts.
+
+## Inhalte
+
+- [ADR-001: YAML für die Konfiguration](ADR-001-YAML.md)
+- [ADR-Vorlage](ADR-###-Template.md)
+
+
+
+================================================
+FILE: docs/conventions/branching-model.md
+================================================
+# Verzweigungsmodell
+
+## Übersicht
+
+Das Projekt verwendet ein schlankes, auf **Squash-Merges** basierendes Branching-Modell mit zwei dauerhaften Branches. Ziel ist es, eine saubere und lineare Git-Historie zu gewährleisten und gleichzeitig die parallele Entwicklung mehrerer Features zu ermöglichen.
+
+---
+
+## Dauerhafte Branches
+
+### `main`
+Der Produktions-Branch. Enthält ausschließlich stabilen, ausgelieferten Code. Direkte Commits auf `main` sind **nicht erlaubt** – Änderungen gelangen ausschließlich über `dev` per Release-Merge hierher.
+
+### `dev`
+Der zentrale Entwicklungs-Branch. Alle abgeschlossenen Feature-, Fix- und Refactor-Branches werden hier per **Squashed Pull Request** zusammengeführt. `dev` ist die Basis für alle neuen Feature-Branches.
+
+---
+
+## Feature-Branches
+
+Jeder neue Feature-, Fix- oder sonstige Entwicklungs-Branch wird von `dev` abgezweigt und nach Abschluss der Arbeit wieder per Squashed PR in `dev` zurückgeführt.
+
+```
+dev
+ ├── feat/VSYS26T2-38
+ ├── fix/VSYS26T2-12
+ └── refactor/VSYS26T2-21
+```
+
+---
+
+## Branch-Benennung
+
+Branches folgen dem Schema:
+
+```
+<typ>/<ticket-id>
+```
+
+**Beispiel:** `feat/VSYS26T2-38`
+
+Die Ticket-ID entspricht dem zugehörigen Jira-Ticket und stellt die direkte Rückverfolgbarkeit sicher.
+
+### Erlaubte Typen
+
+| Typ | Verwendung |
+|---|---|
+| `feat/` | Implementierung eines neuen Features |
+| `fix/` | Behebung eines Fehlers oder Bugs |
+| `refactor/` | Umstrukturierung von Code ohne funktionale Änderung |
+| `test/` | Reine Testfälle, die noch nicht im zugehörigen Feature-Branch behandelt wurden |
+| `chore/` | Alles, was keiner der obigen Kategorien zuzuordnen ist (z. B. Konfiguration, Dokumentation, Abhängigkeiten) |
+
+---
+
+## Rebase statt Merge
+
+Um eine saubere, lineare Historie auf Feature-Branches zu behalten, wird **Rebase** anstelle von Merge verwendet, wenn ein Feature-Branch auf den aktuellen Stand von `dev` gebracht werden muss.
+
+```bash
+# Feature-Branch auf aktuellen dev-Stand bringen
+git fetch origin
+git rebase origin/dev
+```
+
+!!! warning "Achtung bei gemeinsam genutzten Branches"
+    Rebase schreibt die Commit-Historie um. Bei Branches, auf denen mehrere Personen arbeiten, muss dies vorab abgesprochen werden.
+
+---
+
+## Pull Request Workflow
+
+1. Feature-Branch von `dev` erstellen
+2. Entwicklung durchführen, regelmäßig auf `dev` rebasen
+3. Pull Request gegen `dev` öffnen
+4. Code Review abwarten und Feedback einarbeiten
+5. Merge als **Squash Commit** durchführen
+6. Feature-Branch nach dem Merge löschen
+
+---
+
+## Commit-Konventionen
+
+Commit-Messages orientieren sich an den **Conventional Commits**:
+
+```
+<typ>(<scope>): <kurze Beschreibung>
+
+[optionaler Body]
+
+[optionaler Footer, z. B. Jira-Ticket-Referenz]
+```
+
+**Beispiele:**
+
+```
+feat(auth): Login-Seite implementieren
+
+fix(api): Fehler bei leerem Response-Body behoben
+
+Refs: VSYS26T2-38
+```
+
+Weitere Details: [conventionalcommits.org](https://www.conventionalcommits.org/en/v1.0.0/)
+
+Die Commit-Message-Konvention wird lokal automatisch per `pre-commit` `commit-msg` Hook validiert.
+
+
+
+================================================
+FILE: docs/conventions/cli.md
+================================================
+# CLI-Commands
+
+CLI basiert auf **[Typer](https://github.com/fastapi/typer)** + **[Rich](https://github.com/textualize/rich)**
+
+Jedes Command oder jede Gruppe liegt in einer eigenen Datei unter `dsync/cli/commands/`. App-weite
+Typer-Callbacks liegen analog unter `dsync/cli/callbacks/`
+
+Registriert werden Commands und Callbacks zentral in `dsync/cli/__init__.py`
+
+---
+
+## Dateinamen
+
+Echte Commands: `<command_name>.py` bzw. `<command_name>/` (Dateiname = CLI-Command, z.B.
+`init.py` → `dsync init`)
+
+Platzhalter-Beispiele: `_<command_name>` mit Unterstrich-Prefix
+
+---
+
+## Muster
+
+### Einfaches Command
+
+Plain Function exportieren, in `dsync/cli/__init__.py` via `cli.command()(<fn>)` registrieren
+
+Vorlage: `dsync/cli/commands/_hello.py`
+
+### Command-Gruppe
+
+Pro Gruppe ein eigener Ordner `dsync/cli/commands/<group>/`. Ein File pro Sub-Befehl
+nach [Typer one-file-per-command](https://typer.tiangolo.com/tutorial/one-file-per-command/)
+
+Jedes Sub-Befehl-File exportiert `app: typer.Typer = typer.Typer()` mit genau einem `@app.command()`
+-Decorator
+
+Die `__init__.py` der Gruppe definiert die Gruppen-`app` und Sub-Befehle via
+`app.add_typer(<sub>.app)`. `no_args_is_help=True` auf der Gruppe setzen (zeigt Hilfe, wenn die
+Gruppe ohne Sub-Befehl aufgerufen wird)
+
+In `dsync/cli/__init__.py` via `cli.add_typer(<group>.app, name="...")` registrieren
+
+Vorlage: `dsync/cli/commands/_demo/`
+
+---
+
+## Callbacks
+
+Ein Typer-Callback ist eine Funktion, die **vor jedem Subcommand** läuft und App-weit gültige
+Options definiert (z.B. `--config-dir`). Typischer Use Case: einmaliges Initialisieren von
+Runtime-State auf `ctx.obj`, der allen Commands zur Verfügung steht
+
+Pro Callback eine eigene Datei unter `dsync/cli/callbacks/<callback_name>.py`
+
+Registrierung in `dsync/cli/__init__.py` via `cli.callback()(<fn>)`
+
+Vorlage: `dsync/cli/callbacks/config_dir.py` (lädt YAML-Configs in den `AppState`)
+
+---
+
+## Argumente und Options
+
+Annotated-Stil bei Optionen
+
+```python
+name: Annotated[str, typer.Argument(help="Name to greet")] = "world"
+flag: Annotated[bool, typer.Option("--flag", "-f", help="Enable flag")] = False
+```
+
+Default-Wert rechts vom `=`, nicht als erstes Argument in `typer.Argument(...)`
+
+Bei Pflicht-Argument: kein Default setzen
+
+Alle Parameter + Return-Type (`-> None`) annotiert (für automatische Type-Checks)
+
+---
+
+## Docstrings und Help-Texte
+
+Jede Command-Funktion bekommt einen Docstring. Typer nutzt sie automatisch als Command-Help
+
+```python
+def hello(
+    name: Annotated[str, typer.Argument(help="Name to greet")] = "world",
+) -> None:
+    """Greet someone by name."""
+    success(f"Hello, {name}!")
+```
+
+Erste Zeile prägnanter Satz (`Greet someone by name.`)
+
+Bei längerer Hilfe: Leerzeile, danach Details
+
+Argument-spezifische Hilfe bleibt im `typer.Argument(help="...")` / `typer.Option(help="...")`
+
+---
+
+## Rich-Output
+
+Ausschließlich die geteilte Console aus `dsync.cli.console` nutzen
+
+keine eigenen `Console()`-Instanzen
+
+```python
+from dsync.cli.console import console, success, warn, error, info
+
+console.print(f"[info]would add:[/info] {item_id}")  # Inline-Markup
+success("Sync completed.")  # Helper für einfache Nachrichten
+```
+
+Verfügbare Styles (definiert in `dsync/cli/console.py`): `info`, `success`, `warn`, `error`. Neue
+Styles zentral im Theme ergänzen, nicht ad-hoc in einzelnen Commands
+
+---
+
+## App-State
+
+Beim Start lädt `dsync/cli/callbacks/config_dir.py` die YAML-Configs aus dem per `--config-dir` /
+`-c` übergebenen Ordner (Default: `./dsync-config/`) und legt sie als `AppState` (`dsync/state.py`)
+auf `ctx.obj` ab.
+
+Zugriff aus einem Command:
+
+```python
+import typer
+from dsync.state import AppState
+
+
+def my_command(ctx: typer.Context) -> None:
+    """Example command using app state."""
+    state: AppState = ctx.obj
+    # state.folders / state.devices / state.config_dir
+```
+
+Fehlende Config-Dateien oder ein nicht existierendes Verzeichnis sind kein Fehler – die Configs sind
+dann schlicht leer. Ein neues Verzeichnis wird erst beim Save angelegt.
+
+---
+
+## Tests
+
+#TODO Test-Strategie für CLI-Commands definieren nachdem generelle Teststrategie festgelegt wurde
+
+
+
+================================================
+FILE: docs/conventions/index.md
+================================================
+# Konventionen
+
+Hier sind die Projektkonventionen und Arbeitsregeln dokumentiert.
+
+## Inhalte
+
+- [Verzweigungsmodell](branching-model.md)
+- [CLI](cli.md)
+- [Setup](setup.md)
+
+
+
+================================================
+FILE: docs/conventions/setup.md
+================================================
+# Setup
+
+Diese Anleitung beschreibt die lokale Einrichtung von `dsync` fuer die Entwicklung.
+
+## Voraussetzungen
+
+- Installiertes `uv`
+- Git
+- VS Code (optional, empfohlen)
+
+## Projekt einrichten
+
+```bash
+git clone <repo-url>
+cd dsync
+uv sync
+```
+
+## Qualitaets-Checks aktivieren
+
+Die Hooks werden bei jedem Commit automatisch ausgefuehrt.
+
+```bash
+uv run pre-commit install
+uv run pre-commit install --hook-type commit-msg
+```
+
+## Checks manuell ausfuehren
+
+```bash
+uv run pre-commit run --all-files
+```
+
+## Wichtige Tools im Projekt
+
+- `Ruff`: Linting, Formatting, Import-Sortierung, Auto-Fixes, Docstring-Checks
+- `mypy`: Statische Typpruefung (strict)
+- `Bandit`: Security-Checks
+- `commit-msg` Hook: Prueft Conventional Commits
+
+## VS Code (empfohlen)
+
+Installiere die empfohlenen Erweiterungen aus `.vscode/extensions.json`.
+Beim Speichern werden Formatierung, Auto-Fixes und Import-Sortierung mit Ruff ausgefuehrt.
+
+## Beispiel fuer gueltige Commit-Message
+
+```text
+feat(sync): add peer discovery
+```
+
+
+
+
+================================================
+FILE: docs/meetings/index.md
+================================================
+# Besprechungen
+
+Hier liegen die Protokolle und Notizen der Besprechungen.
+
+## Inhalte
+
+- [Protokoll – 18.04.2026](Meetings%20Nodes.md)
+
+
+
+================================================
+FILE: docs/meetings/Meetings Nodes.md
+================================================
+# Besprechungsprotokoll – 18.04.2026
+
+## Ticket-Management
+
+Vorgestellte Tickets werden künftig mit ihren Ergebnissen primär in der Kommentarspalte dokumentiert. Jira-Tickets sollen konsequent zugewiesen und mit dem korrekten Status versehen werden – sobald ein Ticket aktiv bearbeitet wird, ist der Status auf **„In Bearbeitung"** zu setzen.
+
+Jeder erstellt auf Basis seiner eigenen Tickets entsprechende **Subtickets**, die dann konkret bearbeitet werden können.
+
+## Dokumentation & Architektur
+
+Janis richtet **GitHub Pages** für Recherche und Dokumentation ein. Zur Dokumentation von Architekturentscheidungen wird das **ADR-Format** (Architectural Decision Record) genutzt. Als Konfigurationsformat wurde **YAML** festgelegt.
+
+## Entwicklungsrichtlinien
+
+Zu entwickelnde Blöcke und Komponenten sollen so **modular wie möglich** gehalten werden, um gegenseitige Abhängigkeiten in der Entwicklung zu minimieren und Konflikte zu vermeiden.
+
+### Branch-Strategie
+
+Es gibt zwei Hauptbranches:
+
+- **`main`** – Produktions-Branch, auf den ausgeliefert wird
+- **`dev`** – Entwicklungs-Branch, auf den per Squashed PR gemergt wird
+
+Feature-Branches werden per **Rebase** auf den aktuellen Stand gebracht.
+
+### Branch-Benennung
+
+Branches folgen dem Schema `<typ>/ticket-suffix`, z. B. `feat/VSYS26T2-38`. Folgende Typen sind definiert:
+
+| Präfix | Verwendung |
+|---|---|
+| `feat/` | Neue Features |
+| `fix/` | Fehlerbehebungen |
+| `refactor/` | Code-Umstrukturierungen |
+| `test/` | Reine Testfälle, die noch nicht im Feature-Branch behandelt wurden |
+| `chore/` | Alles, was keiner der obigen Kategorien zuzuordnen ist |
+
+Als Referenz dienen die **Conventional Commits**: https://www.conventionalcommits.org/en/v1.0.0/
+
+## Besprechungen
+
+Regelmäßige Treffen finden **dienstags um 11:30 Uhr** statt – jeweils vor der Übungsstunde. Der erste Termin wird abgewartet, um zu sehen, was in der Übung erarbeitet wird, bevor weitere Schritte festgelegt werden.
+
+
+================================================
+FILE: docs/research/index.md
+================================================
+# Recherche
+
+Hier sammelt das Projekt Recherchen, Ideen und technische Notizen.
+
+## Inhalte
+
+- [Geräteidentifikation](VSYS26T2-27.md)
+- [Konfiguration – Ordner & Dateien](konfiguration-ordner-dateien.md)
+- [Konfiguration – Vertrauenswürdige Geräte](VSYS26T2-37.md)
+- [CLI Handling](VSYS26T2-33.md)
+
+
+
+
+================================================
+FILE: docs/research/Konfiguration-Ordner-Dateien.md
+================================================
+# Konfigurationsspezifikation – Ordner & Dateien
+
+Dieses Dokument beschreibt, wie Ordner und Dateien in dsync konfiguriert werden.
+
+---
+
+## Überblick
+
+Ein Nutzer kann sowohl **ganze Ordner** als auch **einzelne Dateien** zur Synchronisierung hinzufügen. Jeder Eintrag bekommt einen eindeutigen Namen, einen Pfad und einen Sync-Modus.
+
+---
+
+## Sync-Modi
+
+| Modus | Beschreibung                                                                                                                        |
+|---|-------------------------------------------------------------------------------------------------------------------------------------|
+| `mirror` | Beide Seiten werden auf denselben Stand gebracht. Änderungen auf einem Gerät werden auf das andere übertragen – in beide Richtungen. |
+| `backup-to-peer` | Nur das lokale Gerät überträgt Daten an den Peer. Der Peer lädt nichts zurück. Geeignet als einseitiges Backup.                     |
+| `backup-from-peer` | Nur der Peer überträgt Daten zum lokalen Gerät. Das lokale Gerät lädt nichts zurück. Gegenstück zu `backup-to-peer`.                  |
+---
+
+## Konfiguration eines Ordners
+
+Ein Ordner-Eintrag besteht aus:
+
+| Feld | Beschreibung                                                                                                                                                                                                                  | Pflicht |
+|---|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---|
+| `id` | Eindeutiger Name für diesen Eintrag                                                                                                                                                                                           | ✅ |
+| `path` | Pfad zum Ordner auf dem lokalen Gerät                                                                                                                                                                                         | ✅ |
+| `mode` | Sync-Modus (`mirror`, `backup-to-peer` oder `backup-from-peer`)                                                                                                                                                                | ✅ |
+| `devices` | Liste von Geräten, die diesen Ordner synchronisieren sollen (z. B. `["laptop", "desktop"]`). Angegeben werden dabei die device-ids. Falls das Feld weggelassen wird, werden alle trusted devices aus `devices.yaml` verwendet. | ❌ |
+**Beispiel:**
+
+```yaml
+id: dokumente
+path: /home/user/Dokumente
+mode: mirror
+devices: 
+    - laptop
+    - desktop
+```
+
+---
+
+## Konfiguration einer einzelnen Datei
+
+Eine einzelne Datei wird genauso konfiguriert wie ein Ordner – nur dass der Pfad auf eine Datei zeigt:
+
+| Feld | Beschreibung                                                                                                                                                                                                                 | Pflicht |
+|---|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---|
+| `id` | Eindeutiger Name für diesen Eintrag                                                                                                                                                                                          | ✅ |
+| `path` | Pfad zu der Datei auf dem lokalen Gerät                                                                                                                                                                                      | ✅ |
+| `mode` | Sync-Modus (`mirror`, `backup-to-peer` oder `backup-from-peer`)                                                                                                                                                              | ✅ |
+| `devices` | Liste von Geräten, die diese Datei synchronisieren sollen (z. B. `["laptop", "desktop"]`). Angegeben werden dabei die device-ids. Falls das Feld weggelassen wird, werden alle trusted devices aus `devices.yaml` verwendet. | ❌ |
+
+**Beispiel:**
+
+```yaml
+id: notizen
+path: /home/user/notizen.txt
+mode: backup-to-peer
+```
+
+---
+
+## Gesamte Konfigurationsdatei
+
+Alle Einträge werden gemeinsam in einer Konfigurationsdatei gespeichert:
+
+```yaml
+entries:
+  - id: dokumente
+    path: /home/user/Dokumente
+    mode: mirror
+    devices: 
+      - laptop
+      - desktop
+
+  - id: notizen
+    path: /home/user/notizen.txt
+    mode: backup-to-peer
+```
+
+---
+
+## Offene Punkte
+
+- Sollen bestimmte Dateien oder Dateitypen ausgeschlossen werden können (z. B. `.tmp`, `.log`)?
+
+---
+
+## Regeln
+
+- Jede `id` muss eindeutig sein – zwei Einträge dürfen nicht denselben Namen haben.
+- Der angegebene `path` muss auf dem lokalen Gerät existieren.
+- Der `mode` darf nur `mirror`, `backup-to-peer` oder `backup-from-peer` sein.
+- Die `devices`-Liste darf nur gültige device-ids enthalten, die in `devices.yaml` definiert sind oder ansonsten weggelassen werden, um alle trusted devices zu verwenden.
+
+
+================================================
+FILE: docs/research/VSYS26T2-27.md
+================================================
+# Recherche: Geräteidentifikation
+
+Die sicherste und meiner Meinung nach beste Variante ist das Erstellen eines Schlüsselpaares. Der private Schlüssel verlässt dabei niemals den PC.
+Zum Sharen bzw. zur Identifikation bietet sich der Fingerprint des Public Keys an.
+
+Der Private Key sollte sicher gespeichert werden:
+
+Falls verfügbar: Keystore / TPM
+
+## Lokale Kommunikation / IP Discovery
+Da wir zu Beginn ohne Relay-Server arbeiten, würde ich zusätzlich die IP im lokalen Netz verwenden.
+Eine weitere Idee wäre, dass jedes Gerät den Fingerprint seines Public Keys per Broadcast im lokalen Netz teilt, sodass andere Geräte die IP des Partners ermitteln können.
+
+## Eventuell Handshake Idee
+Beim Verbindungsaufbau wird der Public Key des Partners geprüft, der Fingerprint lokal berechnet und mit dem gespeicherten Fingerprint verglichen. Erst danach erfolgt die Verschlüsselung der Nutzdaten für den Empfänger.
+
+## Libraries
+- python-zeroconf (Discovery and Publish über Multicast)
+- cryptography (für Zertifikate)
+
+
+================================================
+FILE: docs/research/VSYS26T2-33.md
+================================================
+# Recherche: CLI Handling
+
+Überblick zu Bibliotheken für Kommandozeilen-Argumente in Python.
+
+## argparse (Standardbibliothek)
+
+Teil von Python, keine Installation nötig.
+
+```python
+import argparse
+
+parser = argparse.ArgumentParser(description="Dateien verarbeiten")
+parser.add_argument("datei", help="Pfad zur Eingabedatei")
+parser.add_argument("-o", "--output", default="out.txt")
+parser.add_argument("-v", "--verbose", action="store_true")
+
+args = parser.parse_args()
+```
+
+Aufruf: `python skript.py input.csv -o result.csv -v`
+
+Typ-Prüfung, Auswahl, Pflichtfeld, mehrere Werte:
+
+```python
+parser.add_argument("--anzahl", type=int, default=10)
+parser.add_argument("--modus", choices=["dev", "prod"])
+parser.add_argument("--rate", type=float, required=True)
+parser.add_argument("--tags", nargs="+")  # eine oder mehrere Tags
+```
+
+Subcommands (z. B. `mytool add foo`, `mytool list`):
+
+```python
+sub = parser.add_subparsers(dest="command")
+p_add = sub.add_parser("add")
+p_add.add_argument("item")
+sub.add_parser("list")
+```
+
+Bei falschem Aufruf bricht das Programm automatisch ab und gibt einen Hinweis aus:
+
+```
+$ python skript.py
+usage: skript.py [-h] datei
+skript.py: error: the following arguments are required: datei
+# Exit-Code 2
+```
+
+**Vorteile**
+- Immer verfügbar, keine zusätzliche Abhängigkeit
+- Help-Text (`-h`) wird automatisch erzeugt
+- Subcommands und eigene Validierung möglich
+
+**Nachteile**
+- Viel Schreibarbeit pro Argument
+- Keine Type Hints, kein Lesen von Umgebungsvariablen
+- Keine Farben, keine Prompts
+
+## click (extern)
+
+Installation: `pip install click` · <https://github.com/pallets/click>
+
+Nutzt Decorators. Funktion wird zum Befehl.
+
+```python
+import click
+
+@click.command()
+@click.argument("datei")
+@click.option("-o", "--output", default="out.txt")
+@click.option("-v", "--verbose", is_flag=True)
+def verarbeiten(datei, output, verbose):
+    """Verarbeitet DATEI und schreibt nach OUTPUT."""
+    click.echo(f"Lese {datei}, schreibe nach {output}")
+
+if __name__ == "__main__":
+    verarbeiten()
+```
+
+Eingebaute Typen prüfen automatisch (Datei muss existieren, Wert muss in Range sein, …):
+
+```python
+@click.option("--datei", type=click.Path(exists=True, readable=True))
+@click.option("--log", type=click.File("w"))  # öffnet/schließt selbst
+@click.option("--modus", type=click.Choice(["dev", "prod"]))
+@click.option("--prozent", type=click.IntRange(0, 100))
+```
+
+Umgebungsvariablen lesen: Statt `os.environ["MY_KEY"]` reicht ein Parameter.
+
+```python
+@click.option("--key", envvar="MY_KEY")
+# export MY_KEY=abc → wird automatisch übernommen
+```
+
+Interaktive Eingabe (z. B. Passwort): click fragt nach, wenn nichts übergeben wurde.
+
+```python
+@click.option("--passwort", prompt=True, hide_input=True)
+# Aufruf:  Passwort: ******
+```
+
+Subcommands über `@click.group()` (lassen sich auch verschachteln, z. B. `tool user add`):
+
+```python
+@click.group()
+def cli(): pass
+
+@cli.command()
+def add(): click.echo("hinzugefügt")
+
+@cli.command()
+def list(): click.echo("liste")
+# Aufruf: python tool.py add
+```
+
+Test-Runner `CliRunner` startet den Befehl im Test ohne echten Shell-Aufruf:
+
+```python
+from click.testing import CliRunner
+result = CliRunner().invoke(cli, ["add"])
+assert result.exit_code == 0
+```
+
+**Vorteile**
+- Wenig Boilerplate, Docstring wird zum Help-Text
+- Eingebaute Typen, Prompts, Farben, Umgebungsvariablen
+- Gut testbar, ausgereifte Bibliothek
+
+**Nachteile**
+- Viele Decorators bei großen Befehlen unübersichtlich
+- Type Hints werden nicht genutzt, Typ muss in `type=...` doppelt angegeben werden
+- Etwas langsamerer Start als argparse
+
+## typer (extern)
+
+Installation: `pip install typer` · <https://github.com/fastapi/typer>
+
+Baut auf click auf. Nutzt Type Hints zur Konfiguration.
+
+```python
+import typer
+
+app = typer.Typer()
+
+@app.command()
+def verarbeiten(datei: str, output: str = "out.txt", verbose: bool = False):
+    """Verarbeitet DATEI und schreibt nach OUTPUT."""
+    typer.echo(f"Lese {datei}, schreibe nach {output}")
+
+if __name__ == "__main__":
+    app()
+```
+
+Aufruf: `python skript.py input.csv --output result.csv --verbose`
+
+Typ, Default und Help kommen direkt aus der Funktionssignatur und dem Docstring. Kein extra Parser-Code.
+
+`typer.Argument` für Positionsargumente (müssen in fester Reihenfolge übergeben werden), `typer.Option` für Flags (`--name wert`). Kurzformen wie `-f` lassen sich mitgeben:
+
+```python
+def kopieren(
+    quelle: str = typer.Argument(..., help="Quelldatei"),
+    ziel: str = typer.Argument(..., help="Zieldatei"),
+    force: bool = typer.Option(False, "--force", "-f"),
+):
+    ...
+# Aufruf: python tool.py a.txt b.txt -f
+```
+
+Pflichtfeld: Default auf `...` setzen (statt eines Wertes).
+
+```python
+def run(rate: float = typer.Option(...)):  # rate muss übergeben werden
+    ...
+# Fehlt rate beim Aufruf, bricht typer mit Fehlermeldung ab.
+```
+
+Optionale Werte und Listen über Type Hints:
+
+```python
+def run(
+    name: Optional[str] = None,           # darf weggelassen werden
+    tags: list[str] = typer.Option([]),   # --tags a --tags b
+):
+    ...
+```
+
+Auswahl über `Enum` – typer macht daraus automatisch `--modus dev|prod|test`:
+
+```python
+class Modus(str, Enum):
+    dev = "dev"
+    prod = "prod"
+
+def run(modus: Modus = Modus.dev): ...
+```
+
+Pfade werden automatisch geprüft (existiert die Datei? lesbar? Datei oder Ordner?):
+
+```python
+def analyze(
+    datei: Path = typer.Argument(..., exists=True, readable=True,
+                                 file_okay=True, dir_okay=False),
+):
+    ...
+# Wird nichts gefunden, bricht typer ab — kein eigener Check nötig.
+```
+
+Eigene Validierung über Callback (z. B. nur positive Zahlen):
+
+```python
+def positive(value: int) -> int:
+    if value <= 0:
+        raise typer.BadParameter(f"{value} muss positiv sein")
+    return value
+
+def run(threads: int = typer.Option(4, callback=positive)):
+    ...
+```
+
+Eingabe abfragen, auch mit Bestätigung (z. B. Passwort doppelt eingeben):
+
+```python
+def login(
+    name: str = typer.Option(..., prompt=True),
+    passwort: str = typer.Option(..., prompt=True, hide_input=True,
+                                 confirmation_prompt=True),
+    api_key: str = typer.Option(..., envvar="MY_API_KEY"),
+):
+    ...
+```
+
+Subcommands: mehrere `@app.command()` an derselben App. Verschachtelt mit `add_typer`:
+
+```python
+app = typer.Typer()
+users_app = typer.Typer()
+app.add_typer(users_app, name="users")
+
+@users_app.command("add")
+def users_add(name: str): ...
+# Aufruf: python tool.py users add alice
+```
+
+Shell-Completion für bash, zsh, fish, PowerShell:
+
+```
+$ python tool.py --install-completion
+```
+
+Help-Texte und Fehler werden mit rich formatiert (Farben, Tabellen) – ohne extra Aufwand.
+
+Befehl gezielt mit Exit-Code beenden (z. B. bei Fehler):
+
+```python
+if not datei.exists():
+    typer.echo("Datei fehlt", err=True)
+    raise typer.Exit(code=1)
+```
+
+**Vorteile**
+- Type Hints liefern Typ, Default und Validierung in einem
+- IDE-Autocomplete und mypy funktionieren nativ
+- Erbt click-Features (Prompts, Farben, Subcommands, Tests)
+- Shell-Completion ohne Aufwand
+
+**Nachteile**
+- Bei komplexen Fällen muss man trotzdem click kennen (da es darauf aufbaut)
+- Zwei API-Stile mischen sich (Funktionssignatur + `typer.Option(...)`)
+
+## rich (Ergänzung)
+
+Kein CLI-Parser, sondern Bibliothek für schöne Terminal-Ausgaben (Farben, Tabellen, Progressbars). Bei typer schon mit dabei.
+
+Installation: `pip install rich` · <https://github.com/textualize/rich>
+
+```python
+from rich import print
+from rich.progress import track
+
+print("[bold red]Fehler![/bold red] Datei [green]nicht gefunden[/green]")
+
+for _ in track(range(100), description="Verarbeite..."):
+    ...
+```
+
+Weitere nützliche Features:
+
+Tabellen (z. B. Sync-Status pro Datei):
+
+```python
+from rich.table import Table
+t = Table(title="Status")
+t.add_column("Datei"); t.add_column("Zustand")
+t.add_row("notes.txt", "synced")
+print(t)
+```
+
+Ordner-/Dateibaum:
+
+```python
+from rich.tree import Tree
+tree = Tree("Dokumente")
+tree.add("notes.txt")
+tree.add("bilder/").add("foto.jpg")
+print(tree)
+```
+
+Syntax-Highlighting (z. B. YAML-Konfig anzeigen):
+
+```python
+from rich.syntax import Syntax
+print(Syntax(open("config.yaml").read(), "yaml"))
+```
+
+Logs mit Zeitstempel:
+
+```python
+from rich.console import Console
+Console().log("Sync gestartet")
+# [12:00:01] Sync gestartet  (mit Datei + Zeile)
+```
+
+Lesbarere Fehler (Quellcode mit Highlight statt rohem Traceback):
+
+```python
+from rich.traceback import install
+install()  # einmal beim Start aufrufen
+```
+
+
+
+================================================
+FILE: docs/research/VSYS26T2-37.md
+================================================
+# Konfigurationsspezifikation – Vertrauenswürdige Geräte
+
+Dieses Dokument beschreibt, wie vertrauenswürdige Geräte in dsync konfiguriert werden.
+
+---
+
+## Überblick
+
+Ein Nutzer pflegt eine Liste **vertrauenswürdiger Geräte** manuell. Jedes Gerät wird über den **Fingerprint seines Public Keys** identifiziert.
+Die Verwaltung eines Geräts ist immer ein expliziter Nutzer-Akt.
+
+---
+
+## Konfiguration eines vertrauenswürdigen Geräts
+
+Ein Eintrag besteht aus:
+
+| Feld | Beschreibung | Pflicht |
+|---|---|---|
+| `id` | Eindeutiger Bezeichner für das Gerät, wird nach dem Anlegen nicht mehr geändert | ja |
+| `fingerprint` | Fingerprint des Public Keys des Geräts | ja |
+
+Rollen der Felder:
+
+- Die `id` ist der Bezeichner, über den andere Konfigurationen auf das Gerät verweisen. Sie ist außerdem kürzer und besser lesbar als der Fingerprint und eignet sich daher auch für Anzeigen in CLI und UI.
+- Der `fingerprint` dient ausschließlich der Identitätsprüfung des Geräts. Er wird nicht als Verweis in anderen Konfigurationen genutzt, da er sich bei einem Schlüsselwechsel ändern kann (siehe Offene Punkte).
+
+**Beispiel:**
+
+```yaml
+id: laptop-anna
+fingerprint: <fingerprint-wert>
+```
+
+---
+
+## Gesamte Konfigurationsdatei
+
+Alle Einträge werden gemeinsam in einer Konfigurationsdatei gespeichert:
+
+```yaml
+trusted_devices:
+  - id: laptop-anna
+    fingerprint: <fingerprint-wert-anna>
+
+  - id: server-keller
+    fingerprint: <fingerprint-wert-server>
+```
+
+---
+
+## Mögliche Erweiterungen
+
+Optionale Felder, die in einer späteren Version ergänzt werden könnten und nicht Teil der aktuellen Spezifikation sind:
+
+- `name` – menschenlesbarer Anzeige-Name als Komfort-Feld für CLI- und UI-Ausgaben. Frei änderbar. Wird nicht als Referenzschlüssel verwendet, da andere Konfigurationen über die `id` verweisen.
+
+---
+
+## Offene Punkte
+
+- Umgang mit Key-Rotation (mehrere Fingerprints speichern?): Tauscht ein Gerät sein Schlüsselpaar aus, ändert sich damit auch sein Fingerprint. Offen ist, ob pro Gerät mehrere Fingerprints hinterlegt werden dürfen, damit während des Wechsels alter und neuer Fingerprint eine Zeit lang gemeinsam als gültig gelten.
+
+---
+
+## Regeln
+
+- `id` und `fingerprint` müssen jeweils eindeutig sein – kein Wert darf in zwei Einträgen gleichzeitig vorkommen.
+- Die `id` darf nach dem Anlegen eines Eintrags nicht mehr geändert werden, da andere Konfigurationen darauf verweisen.
+- Einträge werden ausschließlich manuell vom Nutzer verwaltet.
+
+
+
+================================================
+FILE: dsync/__init__.py
+================================================
+"""dsync top-level package."""
+
+
+
+================================================
+FILE: dsync/generate_test_certs.py
+================================================
+"""Generate fingerprints for demo."""
+
+import sys
+import os
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.abspath(os.path.join(current_dir, ".."))
+sys.path.insert(0, parent_dir)
+
+from dsync.crypto.setup_certs import generate_self_signed_cert
+
+print("--- Generate Peer A (Server) ---")
+fp_a = generate_self_signed_cert("peer_a_cert.pem", "peer_a_key.pem")
+
+print("\n--- Generate Peer B (Client) ---")
+fp_b = generate_self_signed_cert("peer_b_cert.pem", "peer_b_key.pem")
+
+print(f'PEER_A_FINGERPRINT = "{fp_a}"')
+print(f'PEER_B_FINGERPRINT = "{fp_b}"')
+
+
+
+================================================
+FILE: dsync/identity.py
+================================================
+"""Local peer identity and discovered-peer mapping."""
+
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass
+import ipaddress
+import json
+from pathlib import Path
+from tempfile import NamedTemporaryFile
+import time
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+DEFAULT_PEER_MAP_PATH = Path(".dsync") / "peer-map.json"
+DEFAULT_TTL_SECONDS = 30
+
+
+@dataclass(slots=True)
+class DiscoveredPeer:
+    """Represents one discovered peer entry in the local mapping."""
+
+    fingerprint: str
+    ipv4: str
+    last_seen: int
+    expires_at: int
+
+
+class PeerMapStore:
+    """Persists fingerprint-to-IPv4 mappings in a local JSON file."""
+
+    def __init__(
+        self,
+        file_path: str | Path = DEFAULT_PEER_MAP_PATH,
+        ttl_seconds: int = DEFAULT_TTL_SECONDS,
+        now_fn: Callable[[], float] | None = None,
+    ) -> None:
+        """Create a `PeerMapStore` backed by `file_path` with a TTL in seconds.
+
+        `now_fn` can be supplied for testing to control the current time.
+        """
+        self.file_path = Path(file_path)
+        self.ttl_seconds = ttl_seconds
+        self._now_fn = now_fn if now_fn is not None else time.time
+
+    def list_peers(self) -> dict[str, DiscoveredPeer]:
+        """Return active peers after removing expired entries."""
+        peers = self._load_peers()
+        updated = self._purge_expired(peers)
+        if updated:
+            self._save_peers(peers)
+        return peers
+
+    def upsert_peer(self, fingerprint: str, ipv4: str) -> DiscoveredPeer:
+        """Update or insert a peer entry with last-write-wins semantics."""
+        normalized_ip = str(ipaddress.IPv4Address(ipv4))
+        if not fingerprint:
+            raise ValueError("Fingerprint must not be empty")
+
+        peers = self._load_peers()
+        self._purge_expired(peers)
+        now = int(self._now_fn())
+        peer = DiscoveredPeer(
+            fingerprint=fingerprint,
+            ipv4=normalized_ip,
+            last_seen=now,
+            expires_at=now + self.ttl_seconds,
+        )
+        peers[fingerprint] = peer
+        self._save_peers(peers)
+        return peer
+
+    def purge_expired(self) -> dict[str, DiscoveredPeer]:
+        """Remove expired entries and return the remaining peer map."""
+        peers = self._load_peers()
+        updated = self._purge_expired(peers)
+        if updated:
+            self._save_peers(peers)
+        return peers
+
+    def _load_peers(self) -> dict[str, DiscoveredPeer]:
+        if not self.file_path.exists():
+            return {}
+
+        raw = json.loads(self.file_path.read_text(encoding="utf-8"))
+        raw_peers = raw.get("peers", {}) if isinstance(raw, dict) else {}
+
+        peers: dict[str, DiscoveredPeer] = {}
+        for fingerprint, value in raw_peers.items():
+            if not isinstance(fingerprint, str) or not isinstance(value, dict):
+                continue
+            ipv4 = value.get("ipv4")
+            last_seen = value.get("last_seen")
+            expires_at = value.get("expires_at")
+            if (
+                not isinstance(ipv4, str)
+                or not isinstance(last_seen, int)
+                or not isinstance(expires_at, int)
+            ):
+                continue
+            try:
+                normalized_ip = str(ipaddress.IPv4Address(ipv4))
+            except ipaddress.AddressValueError:
+                continue
+            peers[fingerprint] = DiscoveredPeer(
+                fingerprint=fingerprint,
+                ipv4=normalized_ip,
+                last_seen=last_seen,
+                expires_at=expires_at,
+            )
+        return peers
+
+    def _save_peers(self, peers: dict[str, DiscoveredPeer]) -> None:
+        self.file_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "meta": {
+                "ttl_seconds": self.ttl_seconds,
+                "updated_at": int(self._now_fn()),
+            },
+            "peers": {fingerprint: asdict(peer) for fingerprint, peer in peers.items()},
+        }
+        json_data = json.dumps(payload, indent=2, sort_keys=True)
+
+        with NamedTemporaryFile(
+            "w",
+            encoding="utf-8",
+            dir=self.file_path.parent,
+            delete=False,
+        ) as tmp:
+            tmp_path = Path(tmp.name)
+            tmp.write(json_data)
+            tmp.write("\n")
+        tmp_path.replace(self.file_path)
+
+    def _purge_expired(self, peers: dict[str, DiscoveredPeer]) -> bool:
+        now = int(self._now_fn())
+        expired = [fingerprint for fingerprint, peer in peers.items() if peer.expires_at <= now]
+        for fingerprint in expired:
+            del peers[fingerprint]
+        return len(expired) > 0
+
+
+def peer_map_path(project_root: str | Path = ".") -> Path:
+    """Return the default project-local peer map path."""
+    return Path(project_root) / DEFAULT_PEER_MAP_PATH
+
+
+
+================================================
+FILE: dsync/integrity.py
+================================================
+"""File integrity helpers."""
+
+import hashlib
+from pathlib import Path
+
+
+def compute_sha256(file_path: str | Path) -> str:
+    """Return the SHA-256 hex digest of the file at ``file_path``."""
+    path = Path(file_path)
+    with path.open("rb") as f:
+        digest = hashlib.file_digest(f, "sha256")
+    return digest.hexdigest()
+
+
+
+================================================
+FILE: dsync/main.py
+================================================
+"""Console entry point delegating to the dsync CLI."""
+
+from dsync.cli import cli
+
+
+def main() -> None:
+    """Run the dsync CLI."""
+    cli()
+
+
+if __name__ == "__main__":
+    main()
+
+
+
+================================================
+FILE: dsync/state.py
+================================================
+"""Runtime state shared between CLI commands."""
+
+from dataclasses import dataclass
+from pathlib import Path
+
+from dsync.config import DevicesConfig, FoldersConfig
+
+
+@dataclass(frozen=True)
+class AppState:
+    """Application state for the running dsync process.
+
+    Access from a CLI command via ``typer.Context.obj``::
+
+        def my_command(ctx: typer.Context) -> None:
+            state: AppState = ctx.obj
+    """
+
+    config_dir: Path
+    folders: FoldersConfig
+    devices: DevicesConfig
+
+
+
+================================================
+FILE: dsync/.gitkeep
+================================================
+[Empty file]
+
+
+================================================
+FILE: dsync/cli/__init__.py
+================================================
+"""CLI root Typer app."""
+
+import typer
+
+from dsync.cli.callbacks.config_dir import config_dir
+
+from dsync.cli.commands import _demo, peer, sync, device, folder
+from dsync.cli.commands._hello import hello
+
+cli: typer.Typer = typer.Typer(
+    name="dsync",
+    help="Decentralized file sync between trusted devices.",
+    no_args_is_help=True,
+    rich_markup_mode="rich",
+)
+
+# callbacks
+cli.callback()(config_dir)
+
+# commands
+cli.command()(hello)
+cli.add_typer(_demo.app, name="demo")
+cli.add_typer(sync.app, name="sync")
+cli.add_typer(peer.app, name="peer")
+cli.add_typer(device.app, name="device")
+cli.add_typer(folder.app, name="folder")
+
+
+
+================================================
+FILE: dsync/cli/console.py
+================================================
+"""Themed Rich console and severity-tagged print helpers."""
+
+from rich.console import Console
+from rich.theme import Theme
+
+_theme = Theme(
+    {
+        "info": "cyan",
+        "success": "green",
+        "warn": "yellow",
+        "error": "bold red",
+    }
+)
+
+console: Console = Console(theme=_theme)
+
+
+def info(message: str) -> None:
+    """Print ``message`` styled as informational output."""
+    console.print(message, style="info")
+
+
+def success(message: str) -> None:
+    """Print ``message`` styled as success output."""
+    console.print(message, style="success")
+
+
+def warn(message: str) -> None:
+    """Print ``message`` styled as a warning."""
+    console.print(message, style="warn")
+
+
+def error(message: str) -> None:
+    """Print ``message`` styled as an error."""
+    console.print(message, style="error")
+
+
+
+================================================
+FILE: dsync/cli/callbacks/__init__.py
+================================================
+"""CLI base app callbacks."""
+
+
+
+================================================
+FILE: dsync/cli/callbacks/config_dir.py
+================================================
+"""App-start callback: resolve config directory and load both configs."""
+
+from pathlib import Path
+from typing import Annotated
+
+import typer
+
+from dsync.cli.console import error, info, warn
+from dsync.config import DevicesConfig, FoldersConfig
+from dsync.state import AppState
+
+DEFAULT_CONFIG_DIR = Path("./dsync-config")
+
+
+def config_dir(
+    ctx: typer.Context,
+    directory: Annotated[
+        Path,
+        typer.Option(
+            "--config-dir",
+            "-c",
+            help="Directory containing folders.yaml and devices.yaml.",
+        ),
+    ] = DEFAULT_CONFIG_DIR,
+) -> None:
+    """Load folder and device configs into the Typer AppState context."""
+    if not directory.exists():
+        warn(f"config directory {directory} does not exist, starting empty")
+    elif not directory.is_dir():
+        raise typer.BadParameter(f"{directory} exists but is not a directory")
+    else:
+        for filename in (FoldersConfig.FILENAME, DevicesConfig.FILENAME):
+            if not (directory / filename).is_file():
+                warn(f"{directory / filename} does not exist, starting empty")
+
+    folders = FoldersConfig.load(directory)
+    devices = DevicesConfig.load(directory)
+
+    # If devices field is omitted, use all trusted devices
+    resolved_entries = []
+    trusted_device_ids = [dev.id for dev in devices.trusted_devices]
+    for entry in folders.entries:
+        if entry.devices is None:
+            resolved_entries.append(entry.model_copy(update={"devices": trusted_device_ids}))
+        else:
+            for device_id in entry.devices:
+                if device_id not in trusted_device_ids:
+                    error(
+                        f"Trusted device {device_id} of folder {directory} is not listed in devices.yaml"
+                    )
+                    raise ValueError(
+                        f"Trusted device {device_id} of folder {directory} is not listed in devices.yaml"
+                    )
+            resolved_entries.append(entry.model_copy(update={"devices": entry.devices}))
+    folders.entries = resolved_entries
+
+    info(
+        f"loaded config from {directory}: "
+        f"{len(folders.entries)} folders, {len(devices.trusted_devices)} devices"
+    )
+
+    ctx.obj = AppState(config_dir=directory, folders=folders, devices=devices)
+
+
+
+================================================
+FILE: dsync/cli/commands/__init__.py
+================================================
+"""CLI command groups."""
+
+
+
+================================================
+FILE: dsync/cli/commands/_hello.py
+================================================
+from typing import Annotated
+
+import typer
+
+from dsync.cli.console import success
+
+
+def hello(
+    name: Annotated[str, typer.Argument(help="Name to greet")] = "world",
+) -> None:
+    """Greet someone by name."""
+    success(f"Hello, {name}!")
+
+
+
+================================================
+FILE: dsync/cli/commands/_demo/__init__.py
+================================================
+"""Demo subcommand group used as a template for real commands."""
+
+import typer
+
+from dsync.cli.commands._demo import add, list as list_cmd
+
+app: typer.Typer = typer.Typer(
+    help="Demo subcommand group - template for later used commands 'folder', 'peer' etc.",
+    no_args_is_help=True,
+)
+
+app.add_typer(add.app)
+app.add_typer(list_cmd.app)
+
+
+
+================================================
+FILE: dsync/cli/commands/_demo/add.py
+================================================
+from typing import Annotated
+
+import typer
+
+from dsync.cli.console import console
+
+app: typer.Typer = typer.Typer()
+
+
+@app.command()
+def add(item_id: Annotated[str, typer.Argument(help="Item ID")]) -> None:
+    """Add an item to the demo store."""
+    console.print(f"[info]would add:[/info] {item_id}")
+
+
+
+================================================
+FILE: dsync/cli/commands/_demo/list.py
+================================================
+import typer
+
+from dsync.cli.console import console
+
+app: typer.Typer = typer.Typer()
+
+
+@app.command("list")
+def list_items() -> None:
+    """List all items in the demo store."""
+    console.print("[info]would list items[/info]")
+
+
+
+================================================
+FILE: dsync/cli/commands/device/__init__.py
+================================================
+"""Top-level `device` CLI group exposing device management commands."""
+
+from __future__ import annotations
+
+import typer
+
+from .add import add
+from .list import list
+from .rm import rm
+from .mod import mod
+
+app: typer.Typer = typer.Typer(help="Device management commands", no_args_is_help=True)
+
+app.command()(list)
+app.command()(add)
+app.command()(rm)
+app.command()(mod)
+
+
+
+================================================
+FILE: dsync/cli/commands/device/add.py
+================================================
+"""CLI command to add a new device."""
+
+from __future__ import annotations
+
+from typing import Annotated
+
+import typer
+
+from dsync.cli.console import error, success
+from dsync.config import TrustedDevice
+from dsync.state import AppState
+from dsync.crypto import is_valid_fingerprint
+
+
+def add(
+    ctx: typer.Context,
+    id: Annotated[str, typer.Argument(help="Unique device id")],
+    fingerprint: Annotated[str, typer.Argument(help="Device fingerprint")],
+) -> None:
+    """Add a new device and persist it to devices.yaml."""
+    state: AppState = ctx.obj
+
+    if any(entry.id == id for entry in state.devices.trusted_devices):
+        error(f"Device with id '{id}' already exists")
+        raise typer.Exit(code=1)
+
+    if any(entry.fingerprint == fingerprint for entry in state.devices.trusted_devices):
+        error(f"Device with fingerprint '{fingerprint}' already exists")
+        raise typer.Exit(code=1)
+
+    if not is_valid_fingerprint(fingerprint):
+        error(f"Fingerprint does not match expected format")
+        raise typer.Exit(code=1)
+
+    state.devices.trusted_devices.append(
+        TrustedDevice(
+            id=id,
+            fingerprint=fingerprint
+        )
+    )
+
+    state.devices.save(state.config_dir, overwrite=True)
+    e = list(filter(lambda f: f.id == id, state.devices.trusted_devices))[0]
+    lines = [
+        "Added device:",
+        f"    • {e.id}",
+        f"      fingerprint:    {e.fingerprint}",
+    ]
+
+    success("\n".join(lines))
+
+
+
+================================================
+FILE: dsync/cli/commands/device/list.py
+================================================
+"""CLI command to list trusted devices."""
+
+from __future__ import annotations
+
+import typer
+
+from dsync.cli.console import success
+
+
+def list(ctx: typer.Context) -> None:
+    """List all trusted devices."""
+    devices = ctx.obj.devices.trusted_devices
+
+    if not devices:
+        success("There are currently no trusted devices configured.")
+        return
+
+    lines = ["Currently Trusted Devices:"]
+    for e in devices:
+        lines.append(f"    • {e.id}")
+        lines.append(f"      fingerprint:    {e.fingerprint}")
+
+    success("\n".join(lines))
+
+
+
+================================================
+FILE: dsync/cli/commands/device/mod.py
+================================================
+"""CLI command to modify a trusted device."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Annotated
+
+import typer
+
+from dsync.cli.console import error, success
+from dsync.config import SyncMode
+from dsync.state import AppState
+from dsync.crypto import is_valid_fingerprint
+
+
+def mod(
+    ctx: typer.Context,
+    id: Annotated[str, typer.Argument(help="Unique device id")],
+    fingerprint: Annotated[str, typer.Argument(help="New device fingerprint")],
+) -> None:
+    """Update fingerprint of trusted device and persist it to devices.yaml."""
+    state: AppState = ctx.obj
+
+    current = next((entry for entry in state.devices.trusted_devices if entry.id == id), None)
+    if current is None:
+        error(f"Device with id '{id}' does not exist")
+        raise typer.Exit(code=1)
+
+    if any(entry.fingerprint == fingerprint and entry.id != id for entry in state.devices.trusted_devices):
+        error(f"Device with fingerprint '{fingerprint}' already exists")
+        raise typer.Exit(code=1)
+
+    if not is_valid_fingerprint(fingerprint):
+        error(f"Fingerprint does not match expected format")
+        raise typer.Exit(code=1)
+
+    updated = current.model_copy(
+        update={
+            **({"fingerprint": fingerprint}),
+        }
+    )
+
+    state.devices.trusted_devices = [updated if entry.id == id else entry for entry in state.devices.trusted_devices]
+
+    state.devices.save(state.config_dir, overwrite=True)
+    lines = [
+        "Modified device fingerprint:",
+        f"    • {updated.id}",
+        f"      fingerprint:    {updated.fingerprint}",
+    ]
+
+    success("\n".join(lines))
+
+
+
+================================================
+FILE: dsync/cli/commands/device/rm.py
+================================================
+"""CLI remove a trusted device."""
+
+from __future__ import annotations
+
+from typing import Annotated
+
+import typer
+
+from dsync.cli.console import error, success
+from dsync.state import AppState
+
+
+def rm(
+    ctx: typer.Context,
+    id: Annotated[str, typer.Argument(help="Unique device id")]
+) -> None:
+    """Remove a trusted device."""
+    state: AppState = ctx.obj
+
+    filtered = list(filter(lambda f: f.id == id, state.devices.trusted_devices))
+    e = filtered[0] if filtered else None
+
+    if not e:
+        error(f"The specified device {id} is not configured.")
+        return
+
+    state.devices.trusted_devices.remove(e)
+
+    state.devices.save(state.config_dir, overwrite=True)
+    lines = [
+        "Removed device:",
+        f"    • {e.id}",
+        f"      fingerprint:    {e.fingerprint}",
+    ]
+
+    success("\n".join(lines))
+
+
+
+================================================
+FILE: dsync/cli/commands/folder/__init__.py
+================================================
+"""Top-level `folder` CLI group exposing folder management commands."""
+
+from __future__ import annotations
+
+import typer
+
+from .add import add
+from .list import list
+from .rm import rm
+from .mod import mod
+
+app: typer.Typer = typer.Typer(help="Folder management commands", no_args_is_help=True)
+
+app.command()(list)
+app.command()(add)
+app.command()(rm)
+app.command()(mod)
+
+
+
+================================================
+FILE: dsync/cli/commands/folder/add.py
+================================================
+"""CLI command to add a new folder."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Annotated
+
+import typer
+
+from dsync.cli.console import error, success
+from dsync.config import FolderEntry, SyncMode
+from dsync.state import AppState
+
+
+def add(
+    ctx: typer.Context,
+    id: Annotated[str, typer.Argument(help="Unique folder id")],
+    path: Annotated[Path, typer.Argument(help="Folder path")],
+    mode: Annotated[SyncMode, typer.Option(help="Sync mode")],
+    devices: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--device",
+            "-d",
+            help="Trusted device ids (repeatable). If omitted, the field stays absent in YAML.",
+        ),
+    ] = None,
+) -> None:
+    """Add a new folder and persist it to folders.yaml."""
+    state: AppState = ctx.obj
+
+    if any(entry.id == id for entry in state.folders.entries):
+        error(f"Folder with id '{id}' already exists")
+        raise typer.Exit(code=1)
+
+    trusted_ids = {device.id for device in state.devices.trusted_devices}
+
+    if devices is not None:
+        unknown = [device_id for device_id in devices if device_id not in trusted_ids]
+        if unknown:
+            error(f"Unknown trusted device id(s): {', '.join(unknown)}")
+            raise typer.Exit(code=1)
+
+    state.folders.entries.append(
+        FolderEntry(
+            id=id,
+            path=path,
+            mode=mode,
+            devices=devices,
+        )
+    )
+
+    state.folders.save(state.config_dir, overwrite=True)
+    e = list(filter(lambda f: f.id == id, state.folders.entries))[0]
+    lines = [
+        "Added folder:",
+        f"    • {e.id}",
+        f"      path:    {e.path}",
+        f"      mode:    {e.mode.value}",
+    ]
+
+    if e.devices is not None:
+        lines.append(f"      devices: {', '.join(e.devices)}")
+
+    success("\n".join(lines))
+
+
+
+================================================
+FILE: dsync/cli/commands/folder/list.py
+================================================
+"""CLI command to list configured folders."""
+
+from __future__ import annotations
+
+import typer
+
+from dsync.cli.console import success
+
+
+def list(ctx: typer.Context) -> None:
+    """List all configured folders."""
+    entries = ctx.obj.folders.entries
+
+    if not entries:
+        success("There are currently no folders configured.")
+        return
+
+    lines = ["Current Folder Configuration:"]
+    for e in entries:
+        lines.append(f"    • {e.id}")
+        lines.append(f"      path:    {e.path}")
+        lines.append(f"      mode:    {e.mode.value}")
+        lines.append(f"      devices: {', '.join(e.devices)}")
+
+    success("\n".join(lines))
+
+
+
+================================================
+FILE: dsync/cli/commands/folder/mod.py
+================================================
+"""CLI command to modify a folder configuration."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Annotated
+
+import typer
+
+from dsync.cli.console import error, success
+from dsync.config import SyncMode
+from dsync.state import AppState
+
+
+def mod(
+    ctx: typer.Context,
+    id: Annotated[str, typer.Argument(help="Unique folder id")],
+    path: Annotated[
+        Path | None,
+        typer.Option("--path", "-p", help="Folder path")
+    ] = None,
+    mode: Annotated[
+        SyncMode | None,
+        typer.Option("--mode", help="Sync mode")
+    ] = None,
+    devices: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--device",
+            "-d",
+            help="Trusted device ids (repeatable). If omitted, the field stays unchanged.",
+        ),
+    ] = None,
+) -> None:
+    """Modify an existing folder and persist it to folders.yaml."""
+    state: AppState = ctx.obj
+
+    if path is None and mode is None and devices is None:
+        error("At least one of --path, --mode, or --device must be provided")
+        raise typer.Exit(code=1)
+
+    current = next((entry for entry in state.folders.entries if entry.id == id), None)
+    if current is None:
+        error(f"Folder with id '{id}' does not exist")
+        raise typer.Exit(code=1)
+
+    trusted_ids = {device.id for device in state.devices.trusted_devices}
+
+    if devices is not None:
+        unknown = [device_id for device_id in devices if device_id not in trusted_ids]
+        if unknown:
+            error(f"Unknown trusted device id(s): {', '.join(unknown)}")
+            raise typer.Exit(code=1)
+
+    updated = current.model_copy(
+        update={
+            **({"path": path} if path is not None else {}),
+            **({"mode": mode} if mode is not None else {}),
+            **({"devices": devices} if devices is not None else {}),
+        }
+    )
+
+    state.folders.entries = [updated if entry.id == id else entry for entry in state.folders.entries]
+
+    state.folders.save(state.config_dir, overwrite=True)
+    lines = [
+        "Modified folder:",
+        f"    • {updated.id}",
+        f"      path:    {updated.path}",
+        f"      mode:    {updated.mode.value}",
+    ]
+
+    if updated.devices is not None:
+        lines.append(f"      devices: {', '.join(updated.devices)}")
+
+    success("\n".join(lines))
+
+
+
+================================================
+FILE: dsync/cli/commands/folder/rm.py
+================================================
+"""CLI remove an folder configuration."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Annotated
+
+import typer
+
+from dsync.cli.console import error, success
+from dsync.config import FolderEntry, SyncMode
+from dsync.state import AppState
+
+
+def rm(
+    ctx: typer.Context,
+    id: Annotated[str, typer.Argument(help="Unique folder id")]
+) -> None:
+    """Remove a configured folder.."""
+    state: AppState = ctx.obj
+
+    filtered = list(filter(lambda f: f.id == id, state.folders.entries))
+    e = filtered[0] if filtered else None
+
+    if not e:
+        error(f"The specified folder {id} is not configured.")
+        return
+
+    state.folders.entries.remove(e)
+
+    state.folders.save(state.config_dir, overwrite=True)
+    lines = [
+        "Removed folder:",
+        f"    • {e.id}",
+        f"      path:    {e.path}",
+        f"      mode:    {e.mode.value}",
+    ]
+
+    if e.devices is not None:
+        lines.append(f"      devices: {', '.join(e.devices)}")
+
+    success("\n".join(lines))
+
+
+
+
+================================================
+FILE: dsync/cli/commands/peer/__init__.py
+================================================
+"""Top-level `peer` CLI group exposing announce/discover/map commands."""
+
+from __future__ import annotations
+
+import typer
+
+from .announce import announce
+from .discover import discover
+from .map import show_map
+
+app: typer.Typer = typer.Typer(help="Peer discovery commands", no_args_is_help=True)
+
+app.command()(announce)
+app.command()(discover)
+app.command(name="map")(show_map)
+
+
+
+================================================
+FILE: dsync/cli/commands/peer/announce.py
+================================================
+"""CLI command to announce this host's fingerprint via mDNS/zeroconf."""
+
+from __future__ import annotations
+
+import time
+from typing import Annotated
+
+import typer
+
+from dsync.cli.console import info, success, warn
+from dsync.crypto import load_keypair, public_key_fingerprint
+from dsync.network.discovery import FingerprintAnnouncer
+
+
+def announce(
+    seconds: Annotated[
+        int, typer.Option("--seconds", "-s", help="Broadcast duration in seconds")
+    ] = 30,
+) -> None:
+    """Broadcast this device fingerprint over local multicast."""
+    try:
+        _, public_key_pem = load_keypair()
+    except FileNotFoundError:
+        warn("No local keypair found. Generate/import keys first.")
+        raise typer.Exit(code=1) from None
+
+    fingerprint = public_key_fingerprint(public_key_pem)
+    announcer = FingerprintAnnouncer(fingerprint=fingerprint)
+
+    info(f"Announcing fingerprint {fingerprint} for {seconds}s")
+    announcer.start()
+    try:
+        time.sleep(max(seconds, 0))
+    except KeyboardInterrupt:
+        warn("Stopped by user")
+    finally:
+        announcer.stop()
+
+    success("Announce finished")
+
+
+
+================================================
+FILE: dsync/cli/commands/peer/discover.py
+================================================
+"""CLI command to discover peers on the local network and persist a peer map."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Annotated
+
+import typer
+
+from dsync.cli.console import info, success, warn
+from dsync.crypto import load_keypair, public_key_fingerprint
+from dsync.identity import PeerMapStore
+from dsync.network.discovery import PeerDiscoveryRunner
+
+
+def discover(
+    seconds: Annotated[
+        int, typer.Option("--seconds", "-s", help="Discovery duration in seconds")
+    ] = 10,
+    map_file: Annotated[
+        Path,
+        typer.Option(
+            "--map-file",
+            help="Path to peer map JSON file",
+        ),
+    ] = Path(".dsync") / "peer-map.json",
+) -> None:
+    """Listen for peers and persist fingerprint-to-IPv4 mapping."""
+    own_fingerprint: str | None = None
+    try:
+        _, public_key_pem = load_keypair()
+        own_fingerprint = public_key_fingerprint(public_key_pem)
+    except FileNotFoundError:
+        warn("No local keypair found, own fingerprint filtering disabled.")
+
+    store = PeerMapStore(file_path=map_file)
+    runner = PeerDiscoveryRunner(store=store)
+
+    info(f"Discovering peers for {seconds}s")
+    peers, stats = runner.discover(duration_seconds=seconds, own_fingerprint=own_fingerprint)
+
+    info(f"Events seen: {stats.events_seen}, mappings written: {stats.peers_written}")
+    if not peers:
+        warn("No peers found")
+        return
+
+    success(f"Active peers: {len(peers)}")
+    for peer in peers.values():
+        info(f"{peer.fingerprint} -> {peer.ipv4} (expires_at={peer.expires_at})")
+
+
+
+================================================
+FILE: dsync/cli/commands/peer/map.py
+================================================
+"""CLI command to show the peer map stored locally."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Annotated
+
+import typer
+
+from dsync.cli.console import info, warn
+from dsync.identity import PeerMapStore
+
+
+def show_map(
+    map_file: Annotated[
+        Path,
+        typer.Option(
+            "--map-file",
+            help="Path to peer map JSON file",
+        ),
+    ] = Path(".dsync") / "peer-map.json",
+) -> None:
+    """Show the current fingerprint-to-IPv4 mapping."""
+    peers = PeerMapStore(file_path=map_file).list_peers()
+    if not peers:
+        warn("Peer map is empty")
+        return
+
+    for peer in peers.values():
+        info(f"{peer.fingerprint} -> {peer.ipv4} (expires_at={peer.expires_at})")
+
+
+
+================================================
+FILE: dsync/cli/commands/sync/__init__.py
+================================================
+"""Top-level `sync` CLI group exposing sync commands."""
+
+from __future__ import annotations
+
+import typer
+
+from .start import start_p2p_sync
+from .run_backup import sync
+
+app: typer.Typer = typer.Typer(help="Sync commands", no_args_is_help=True)
+
+app.command(name="start")(start_p2p_sync)
+app.command(name="run_backup")(sync)
+
+
+
+================================================
+FILE: dsync/cli/commands/sync/run_backup.py
+================================================
+"""CLI command to manually sync folders with their configured peers."""
+
+from __future__ import annotations
+
+import asyncio
+from pathlib import Path
+from typing import TYPE_CHECKING, Annotated
+import typer
+
+from dsync.cli.console import info, success, warn, error
+from dsync.identity import PeerMapStore
+from dsync.network.node import P2PNode
+
+if TYPE_CHECKING:
+    from dsync.state import AppState
+    from dsync.config import FolderEntry
+
+
+def sync(
+        ctx: typer.Context,
+        folder_id: Annotated[
+            str | None,
+            typer.Option("--folder-id", "-f", help="Specific folder ID (or sync all")
+        ] = None,
+        map_file: Annotated[
+            Path,
+            typer.Option("--map-file", help="Path to peer map JSON file")
+        ] = Path(".dsync") / "peer-map.json",
+        cert: Annotated[str, typer.Option(help="Path to your certificate")] = "cert.pem",
+        key: Annotated[str, typer.Option(help="Path to your private key")] = "key.pem",
+) -> None:
+    """Manually sync folders with their configured peers.
+
+    Without --folder-id: syncs all folders from folders.yaml.
+    With --folder-id: syncs only the specific folder.
+
+    Each folder is synced with all its configured trusted devices.
+    """
+    state: AppState = ctx.obj
+
+    if not state.folders.entries:
+        warn("No folders configured in folders.yaml")
+        raise typer.Exit(code=1)
+
+    if not state.devices.trusted_devices:
+        warn("No trusted devices configured in devices.yaml")
+        raise typer.Exit(code=1)
+
+    # Load peer map
+    peer_store = PeerMapStore(file_path=map_file)
+    peer_map = peer_store.list_peers()
+
+    if not peer_map:
+        warn("Peer map is empty. Run 'dsync peer discover' first.")
+        raise typer.Exit(code=1)
+
+    # Choose which folders should be synced
+    if folder_id is None:
+        folders_to_sync = state.folders.entries
+        info(f"Syncing all {len(folders_to_sync)} configured folder(s)...")
+    else:
+        folder = _find_folder(state, folder_id)
+        if folder is None:
+            error(f"Folder '{folder_id}' not found in folders.yaml")
+            raise typer.Exit(code=1)
+        folders_to_sync = [folder]
+        info(f"Syncing folder '{folder_id}'...")
+
+    # Run async sync
+    total_syncs, failed_syncs = asyncio.run(
+        _sync_all_folders(folders_to_sync, peer_map, cert, key, state)
+    )
+
+    info(f"\n{'='*60}")
+    success(f"Completed: {total_syncs} successful sync(s)")
+    if failed_syncs > 0:
+        warn(f"Failed: {failed_syncs} sync(s)")
+
+
+async def _sync_all_folders(
+        folders_to_sync: list[FolderEntry],
+        peer_map: dict,
+        cert: str,
+        key: str,
+        state: AppState,
+) -> tuple[int, int]:
+    """Sync all folders with their peers. Returns (total_syncs, failed_syncs)."""
+    total_syncs = 0
+    failed_syncs = 0
+
+    for idx, folder in enumerate(folders_to_sync, start=1):
+        info(f"\n[{idx}/{len(folders_to_sync)}] Folder: {folder.id}")
+        info(f"    Path: {folder.path}")
+        info(f"    Peers: {', '.join(folder.devices)}")
+
+        sync_tasks = []
+        peer_ids = []
+
+        for peer_id in folder.devices:
+            peer_device = _find_device(state, peer_id)
+            if peer_device is None:
+                error(f"Peer device {peer_id} not found in devices.yaml")
+                failed_syncs += 1
+                continue
+
+            sync_tasks.append(
+                _sync_folder_with_peer(
+                    folder=folder,
+                    peer_fingerprint=peer_device.fingerprint,
+                    peer_map=peer_map,
+                    cert=cert,
+                    key=key,
+                    state=state,
+                )
+            )
+            peer_ids.append(peer_id)
+
+        results = await asyncio.gather(*sync_tasks, return_exceptions=True)
+
+        for peer_id, result in zip(peer_ids, results):
+            if isinstance(result, Exception):
+                error(f"Failed to sync with peer {peer_id}: {result}")
+                failed_syncs += 1
+            else:
+                success(f"Synced with peer {peer_id}")
+                total_syncs += 1
+
+    return total_syncs, failed_syncs
+
+
+def _find_folder(state: AppState, folder_id: str) -> FolderEntry | None:
+    """Find a folder entry by its ID."""
+    for folder in state.folders.entries:
+        if folder.id == folder_id:
+            return folder
+    return None
+
+
+def _find_device(state: AppState, device_id: str):
+    """Find a device entry by its ID."""
+    for device in state.devices.trusted_devices:
+        if device.id == device_id:
+            return device
+    return None
+
+
+async def _sync_folder_with_peer(
+        folder: FolderEntry,
+        peer_fingerprint: str,
+        peer_map: dict,
+        cert: str,
+        key: str,
+        state: AppState,
+) -> None:
+    """Perform the actual sync operation between a folder and a peer.
+
+    Args:
+        folder: The folder configuration from folders.yaml
+        peer_fingerprint: The peer's public key fingerprint
+        peer_map: Dictionary of fingerprint -> peer info mappings
+        cert: Path to local certificate file
+        key: Path to local private key file
+        state: Application state
+
+    Raises:
+        ValueError: If peer not found in peer map
+        Exception: If sync fails
+    """
+    # Find peer in map
+    if peer_fingerprint not in peer_map:
+        raise ValueError(f"Peer {peer_fingerprint} not found in peer map")
+
+    peer_info = peer_map[peer_fingerprint]
+    peer_ip = peer_info.ipv4
+
+    info(f"Connecting to {peer_fingerprint[:16]}... at {peer_ip}")
+
+    # Create P2PNode as client
+    node = P2PNode(
+        is_server=False,
+        cert_path=cert,
+        key_path=key,
+        state=state,
+        folder=folder,
+    )
+
+    port = 9999
+
+    try:
+        await node.start(host=peer_ip, port=port)
+    except ConnectionRefusedError:
+        raise Exception(f"Could not connect to {peer_ip}:{port} - peer may be offline")
+    except Exception as e:
+        raise Exception(f"Sync failed: {e}") from e
+
+
+
+================================================
+FILE: dsync/cli/commands/sync/start.py
+================================================
+"""CLI command to start peer-to-peer data synchronization."""
+
+from __future__ import annotations
+
+import asyncio
+from typing import TYPE_CHECKING, Annotated
+
+import typer
+
+from dsync.cli.console import info, success
+from dsync.network.node import P2PNode
+
+if TYPE_CHECKING:
+    from dsync.state import AppState
+
+
+def start_p2p_sync(
+    ctx: typer.Context,
+    mode: Annotated[str, typer.Option(help="'server' (waits) or 'client' (connects)")] = "client",
+    cert: Annotated[str, typer.Option(help="Path to your certificate (.pem)")] = "cert.pem",
+    key: Annotated[str, typer.Option(help="Path to your private key (.pem)")] = "key.pem",
+    port: Annotated[int, typer.Option(help="The network port")] = 9999,
+) -> None:
+    """Main CLI command for starting peer-to-peer data synchronization.
+
+    Initializes the P2P node and handles the establishment of the basic (still unencrypted) TCP connection.
+    It supports two main modes:
+
+    LAN mode: The program either acts as a listening server or connects directly.
+
+    Once the raw socket connection is established, it is passed to the 'P2PNode',
+    which handles the TLS handshake, authentication, and data exchange.
+
+    Args:
+        ctx (typer.Context): The typer context containing the runtime AppState.
+        mode (str): The role in the direct connection ('server' or 'client').
+        cert (str): Path to ones own TLS certificate file (.pem).
+        key (str): Path to ones own private key file (.pem).
+        port (int): The network port for direct connections (local).
+    """
+    state: AppState = ctx.obj
+
+    is_server: bool = mode.lower() == "server"
+    node = P2PNode(is_server, cert, key, state)
+
+    host = "0.0.0.0" if is_server else "127.0.0.1"
+    # LAN mode
+    if is_server:
+        info(f"Starting server on port {port}, waiting for connection...")
+
+    else:
+        info(f"Connecting to server on 127.0.0.1:{port}...")
+
+    try:
+        asyncio.run(node.start(host, port))
+        success("Data transfer completed or connection closed.")
+    except KeyboardInterrupt:
+        info("\nShutting down...")
+    except Exception as e:
+        info(f"\n[!] Sync stopped: {e}")
+
+
+
+================================================
+FILE: dsync/config/__init__.py
+================================================
+"""Public API for loading and saving dsync YAML configuration files."""
+
+from dsync.config.device import DevicesConfig, TrustedDevice
+from dsync.config.folder import FolderEntry, FoldersConfig, SyncMode
+
+__all__ = [
+    "DevicesConfig",
+    "FolderEntry",
+    "FoldersConfig",
+    "SyncMode",
+    "TrustedDevice",
+]
+
+
+
+================================================
+FILE: dsync/config/_base.py
+================================================
+"""Base mixin for Pydantic models backed by a YAML file."""
+
+from pathlib import Path
+from typing import ClassVar, Self
+
+from pydantic import BaseModel
+import yaml
+
+
+class YamlFileConfig(BaseModel):
+    """Base for Pydantic models backed by a YAML file in a directory."""
+
+    FILENAME: ClassVar[str]
+
+    @classmethod
+    def load(cls, directory: Path) -> Self:
+        """Load the config from ``directory / cls.FILENAME`` (empty model if absent)."""
+        file = directory / cls.FILENAME
+        if not file.is_file():
+            return cls()
+        return cls.model_validate(yaml.safe_load(file.read_text(encoding="utf-8")) or {})
+
+    def save(self, directory: Path, *, overwrite: bool = False) -> None:
+        """Write the config to ``directory / FILENAME`` (raise FileExistsError if present)."""
+        file = directory / self.FILENAME
+        if file.exists() and not overwrite:
+            raise FileExistsError(file)
+        directory.mkdir(parents=True, exist_ok=True)
+        file.write_text(
+            yaml.safe_dump(self.model_dump(mode="json"), sort_keys=False, allow_unicode=True),
+            encoding="utf-8",
+        )
+
+
+
+================================================
+FILE: dsync/config/device.py
+================================================
+"""Trusted-devices configuration models and CRUD helpers."""
+
+from typing import ClassVar
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from dsync.config._base import YamlFileConfig
+
+
+class TrustedDevice(BaseModel):
+    """A trusted peer device identified by its public-key fingerprint."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    id: str = Field(min_length=1)
+    fingerprint: str = Field(min_length=1)
+
+
+class DevicesConfig(YamlFileConfig):
+    """Aggregate of all trusted device entries."""
+
+    model_config = ConfigDict(extra="forbid")
+    FILENAME: ClassVar[str] = "devices.yaml"
+    trusted_devices: list[TrustedDevice] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _unique(self) -> "DevicesConfig":
+        """Ensure both device ids and fingerprints are unique."""
+        ids = [d.id for d in self.trusted_devices]
+        fps = [d.fingerprint for d in self.trusted_devices]
+        if len(set(ids)) != len(ids):
+            raise ValueError("trusted_devices: duplicate id")
+        if len(set(fps)) != len(fps):
+            raise ValueError("trusted_devices: duplicate fingerprint")
+        return self
+
+
+
+================================================
+FILE: dsync/config/folder.py
+================================================
+"""Folder sync configuration models and CRUD helpers."""
+
+from enum import StrEnum
+from pathlib import Path
+from typing import ClassVar
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from dsync.config._base import YamlFileConfig
+
+
+class SyncMode(StrEnum):
+    """Sync direction for a folder entry."""
+
+    MIRROR = "mirror"
+    BACKUP_TO_PEER = "backup-to-peer"
+    BACKUP_FROM_PEER = "backup-from-peer"
+
+
+class FolderEntry(BaseModel):
+    """A single folder or file configured for synchronization."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    id: str = Field(min_length=1)
+    path: Path
+    mode: SyncMode
+    devices: list[str] | None = None
+    recursive: bool = True
+
+
+class FoldersConfig(YamlFileConfig):
+    """Aggregate of all configured folder entries."""
+
+    model_config = ConfigDict(extra="forbid")
+    FILENAME: ClassVar[str] = "folders.yaml"
+    entries: list[FolderEntry] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _unique_ids(self) -> "FoldersConfig":
+        """Ensure entry ids are unique."""
+        ids = [e.id for e in self.entries]
+        if len(set(ids)) != len(ids):
+            raise ValueError("entries: duplicate id")
+        return self
+
+
+
+================================================
+FILE: dsync/crypto/__init__.py
+================================================
+"""Key generation, persistence and fingerprint helpers."""
+
+from __future__ import annotations
+
+from .keys import (
+    FingerprintFormat,
+    default_key_paths,
+    generate_keypair,
+    load_keypair,
+    public_key_fingerprint,
+    save_keypair,
+    is_valid_fingerprint,
+)
+
+__all__ = [
+    "FingerprintFormat",
+    "default_key_paths",
+    "generate_keypair",
+    "load_keypair",
+    "public_key_fingerprint",
+    "save_keypair",
+    "is_valid_fingerprint",
+]
+
+
+
+================================================
+FILE: dsync/crypto/keys.py
+================================================
+"""Cryptographic key management for Ed25519 keypairs."""
+
+from __future__ import annotations
+
+import base64
+import hashlib
+import os
+from pathlib import Path
+import platform
+from typing import Literal
+
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
+
+from dsync.crypto.secure_storage import KeyExistsError, SecureKeyStorage
+
+FingerprintFormat = Literal["hex", "base64url"]
+
+
+def default_key_paths(app_name: str = "dsync") -> tuple[Path, Path]:
+    """Return default private/public key paths for the current operating system."""
+    system = platform.system()
+
+    if system == "Windows":
+        appdata = os.environ.get("APPDATA")
+        base_dir = Path(appdata) if appdata else Path.home() / "AppData" / "Roaming"
+        key_dir = base_dir / app_name / "keys"
+    elif system == "Darwin":
+        key_dir = Path.home() / "Library" / "Application Support" / app_name / "keys"
+    else:
+        key_dir = Path.home() / ".config" / app_name / "keys"
+
+    return key_dir / "id_ed25519.pem", key_dir / "id_ed25519.pub"
+
+
+def _resolve_key_paths(
+    private_path: str | Path | None, public_path: str | Path | None
+) -> tuple[Path, Path]:
+    default_private_path, default_public_path = default_key_paths()
+    private_target = Path(private_path) if private_path is not None else default_private_path
+    public_target = Path(public_path) if public_path is not None else default_public_path
+    return private_target, public_target
+
+
+def generate_keypair() -> tuple[bytes, bytes]:
+    """Generate an Ed25519 keypair and return both keys as PEM bytes."""
+    private_key = Ed25519PrivateKey.generate()
+    public_key = private_key.public_key()
+
+    private_pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+    public_pem = public_key.public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+    return private_pem, public_pem
+
+
+def save_keypair(
+    private_key_pem: bytes,
+    public_key_pem: bytes,
+    private_path: str | Path | None = None,
+    public_path: str | Path | None = None,
+) -> tuple[Path, Path]:
+    """Persist keypair to the given paths or OS-specific default paths."""
+    private_target, public_target = _resolve_key_paths(private_path, public_path)
+
+    private_target.parent.mkdir(parents=True, exist_ok=True)
+    public_target.parent.mkdir(parents=True, exist_ok=True)
+
+    private_target.write_bytes(private_key_pem)
+    public_target.write_bytes(public_key_pem)
+    return private_target, public_target
+
+
+def load_keypair(
+    private_path: str | Path | None = None,
+    public_path: str | Path | None = None,
+) -> tuple[bytes, bytes]:
+    """Load keypair from the given paths or OS-specific default paths."""
+    private_target, public_target = _resolve_key_paths(private_path, public_path)
+
+    private_key_pem = private_target.read_bytes()
+    public_key_pem = public_target.read_bytes()
+    return private_key_pem, public_key_pem
+
+
+def public_key_fingerprint(public_key_pem: bytes, fmt: FingerprintFormat = "hex") -> str:
+    """Create a stable fingerprint from the public key (SHA-256 over raw Ed25519 bytes)."""
+    public_key = serialization.load_pem_public_key(public_key_pem)
+    if not isinstance(public_key, Ed25519PublicKey):
+        raise TypeError("Only Ed25519 public keys are supported")
+
+    public_raw = public_key.public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw,
+    )
+    digest = hashlib.sha256(public_raw).digest()
+
+    if fmt == "hex":
+        return "hex-" + digest.hex()
+    if fmt == "base64url":
+        return "b64u-" + base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
+    raise ValueError(f"Unsupported fingerprint format: {fmt}")
+
+
+def is_valid_fingerprint(fp: str) -> bool:
+    """Return True if ``fp`` looks like a supported fingerprint string.
+
+    Accepted forms:
+    - "hex-" prefix followed by 64 hex chars
+    - "b64u-" prefix followed by urlsafe base64 (padding removed) of 32 bytes
+    - raw 64-char hex string
+    """
+    if not isinstance(fp, str) or not fp:
+        return False
+
+    if fp.startswith("hex-"):
+        hexpart = fp[4:]
+        return len(hexpart) == 64 and all(c in "0123456789abcdefABCDEF" for c in hexpart)
+
+    if fp.startswith("b64u-"):
+        b64part = fp[5:]
+        padded = b64part + ("=" * (-len(b64part) % 4))
+        try:
+            decoded = base64.urlsafe_b64decode(padded.encode("ascii"))
+        except Exception:
+            return False
+        return len(decoded) == 32
+
+    if len(fp) == 64 and all(c in "0123456789abcdefABCDEF" for c in fp):
+        return True
+
+    return False
+  
+  
+def generate_and_store_keypair_securely(
+    force: bool = False,
+    warn_on_existing: bool = True,
+    service_name: str = "dsync",
+) -> tuple[str, str]:
+    """Generate and store keypair in system keystore.
+
+    Args:
+        force: Overwrite existing keys if True
+        warn_on_existing: Show warning when keys exist
+        service_name: Keystore service name
+
+    Returns:
+        (private_key_pem, public_key_pem) as strings
+
+    Raises:
+        KeyExistsError: Keys exist and force=False
+        KeyringError: Keystore backend failed
+    """
+    private_key_pem, public_key_pem = generate_keypair()
+
+    storage = SecureKeyStorage(service_name)
+    storage.store_keypair(
+        private_key_pem.decode("utf-8"),
+        public_key_pem.decode("utf-8"),
+        force=force,
+        warn_on_existing=warn_on_existing,
+    )
+
+    return private_key_pem.decode("utf-8"), public_key_pem.decode("utf-8")
+
+
+def load_keypair_securely(
+    service_name: str = "dsync",
+) -> tuple[bytes, bytes] | None:
+    """Load keypair from system keystore.
+
+    Args:
+        service_name: Keystore service name
+
+    Returns:
+        (private_key_pem, public_key_pem) as bytes, or None
+
+    Raises:
+        KeyringError: Keystore backend failed
+    """
+    storage = SecureKeyStorage(service_name)
+    private_key_str, public_key_str = storage.get_keypair()
+
+    if private_key_str is None or public_key_str is None:
+        return None
+
+    return private_key_str.encode("utf-8"), public_key_str.encode("utf-8")
+
+
+def has_stored_keypair(service_name: str = "dsync") -> bool:
+    """Check if keypair exists in keystore.
+
+    Args:
+        service_name: Keystore service name
+
+    Returns:
+        True if both keys exist, False otherwise
+    """
+    storage = SecureKeyStorage(service_name)
+    return storage.has_keypair()
+
+
+def delete_stored_keypair(service_name: str = "dsync") -> tuple[bool, bool]:
+    """Delete keypair from keystore.
+
+    Args:
+        service_name: Keystore service name
+
+    Returns:
+        (private_deleted, public_deleted) success flags
+
+    Raises:
+        KeyringError: Keystore backend failed
+    """
+    storage = SecureKeyStorage(service_name)
+    return storage.delete_keypair()
+
+
+def migrate_keys_to_secure_storage(
+    private_path: str | Path | None = None,
+    public_path: str | Path | None = None,
+    force: bool = False,
+    service_name: str = "dsync",
+) -> tuple[bool, bool]:
+    """Migrate file-based keys to secure keystore.
+
+    Args:
+        private_path: Path to private key file
+        public_path: Path to public key file
+        force: Overwrite existing keys in keystore
+        service_name: Keystore service name
+
+    Returns:
+        (private_migrated, public_migrated) success flags
+
+    Raises:
+        KeyExistsError: Keys exist in keystore and force=False
+        KeyringError: Keystore backend failed
+        FileNotFoundError: Source files don't exist
+    """
+    storage = SecureKeyStorage(service_name)
+
+    private_migrated = False
+    public_migrated = False
+
+    # Migrate private key
+    try:
+        private_target, _ = _resolve_key_paths(private_path, None)
+        if private_target.exists():
+            private_key_pem = private_target.read_bytes()
+            storage.store_private_key(
+                private_key_pem.decode("utf-8"),
+                force=force,
+                warn_on_existing=False,
+            )
+            private_migrated = True
+    except (KeyExistsError, FileNotFoundError):
+        pass
+
+    # Migrate public key
+    try:
+        _, public_target = _resolve_key_paths(None, public_path)
+        if public_target.exists():
+            public_key_pem = public_target.read_bytes()
+            storage.store_public_key(
+                public_key_pem.decode("utf-8"),
+                force=force,
+                warn_on_existing=False,
+            )
+            public_migrated = True
+    except (KeyExistsError, FileNotFoundError):
+        pass
+
+    return private_migrated, public_migrated
+
+
+
+================================================
+FILE: dsync/crypto/secure_storage.py
+================================================
+"""Secure key storage using platform-specific keystores.
+
+Uses system keystore/credential manager via keyring library.
+
+Supported platforms:
+- macOS: Keychain
+- Windows: Credential Locker
+- Linux: Secret Service/KWallet
+"""
+
+from __future__ import annotations
+
+import warnings
+
+import keyring
+from keyring.errors import KeyringError, PasswordSetError
+
+SERVICE_NAME = "dsync"
+PRIVATE_KEY_USERNAME = "private_key"
+PUBLIC_KEY_USERNAME = "public_key"
+
+
+class KeyExistsError(Exception):
+    """Raised when trying to overwrite existing key without force."""
+
+
+class SecureKeyStorage:
+    """Manages secure key storage using system keystores."""
+
+    def __init__(self, service_name: str = SERVICE_NAME) -> None:
+        """Initialize secure storage with service name."""
+        self.service_name = service_name
+        self._keyring = keyring.get_keyring()
+
+    def key_exists(self, username: str) -> bool:
+        """Check if key exists in keystore."""
+        try:
+            return self._keyring.get_password(self.service_name, username) is not None
+        except KeyringError:
+            return False
+
+    def store_private_key(
+        self, private_key_pem: str, force: bool = False, warn_on_existing: bool = True
+    ) -> None:
+        """Store private key in system keystore.
+
+        Args:
+            private_key_pem: PEM-encoded private key
+            force: Overwrite existing key if True
+            warn_on_existing: Show warning when key exists
+
+        Raises:
+            KeyExistsError: Key exists and force=False
+            KeyringError: Keyring backend failed
+        """
+        if not force and self.key_exists(PRIVATE_KEY_USERNAME):
+            raise KeyExistsError(
+                "Private key already exists in keystore. "
+                "Use force=True to overwrite or delete the existing key first."
+            )
+
+        if warn_on_existing and self.key_exists(PRIVATE_KEY_USERNAME):
+            warnings.warn(
+                "Overwriting existing private key in keystore. "
+                "This will invalidate any existing trust relationships.",
+                UserWarning,
+                stacklevel=2,
+            )
+
+        try:
+            self._keyring.set_password(self.service_name, PRIVATE_KEY_USERNAME, private_key_pem)
+        except (PasswordSetError, KeyringError) as e:
+            raise KeyringError(f"Failed to store private key: {e}") from e
+
+    def store_public_key(
+        self, public_key_pem: str, force: bool = False, warn_on_existing: bool = True
+    ) -> None:
+        """Store public key in system keystore.
+
+        Args:
+            public_key_pem: PEM-encoded public key
+            force: Overwrite existing key if True
+            warn_on_existing: Show warning when key exists
+
+        Raises:
+            KeyExistsError: Key exists and force=False
+            KeyringError: Keyring backend failed
+        """
+        if not force and self.key_exists(PUBLIC_KEY_USERNAME):
+            raise KeyExistsError(
+                "Public key already exists in keystore. "
+                "Use force=True to overwrite or delete the existing key first."
+            )
+
+        if warn_on_existing and self.key_exists(PUBLIC_KEY_USERNAME):
+            warnings.warn("Overwriting existing public key in keystore.", UserWarning, stacklevel=2)
+
+        try:
+            self._keyring.set_password(self.service_name, PUBLIC_KEY_USERNAME, public_key_pem)
+        except (PasswordSetError, KeyringError) as e:
+            raise KeyringError(f"Failed to store public key: {e}") from e
+
+    def store_keypair(
+        self,
+        private_key_pem: str,
+        public_key_pem: str,
+        force: bool = False,
+        warn_on_existing: bool = True,
+    ) -> None:
+        """Store both private and public keys.
+
+        Args:
+            private_key_pem: PEM-encoded private key
+            public_key_pem: PEM-encoded public key
+            force: Overwrite existing keys if True
+            warn_on_existing: Show warning when keys exist
+
+        Raises:
+            KeyExistsError: Any key exists and force=False
+            KeyringError: Keyring backend failed
+        """
+        # Check existence first to fail fast
+        if not force:
+            if self.key_exists(PRIVATE_KEY_USERNAME):
+                raise KeyExistsError("Private key already exists in keystore")
+            if self.key_exists(PUBLIC_KEY_USERNAME):
+                raise KeyExistsError("Public key already exists in keystore")
+
+        # Store both keys
+        self.store_private_key(private_key_pem, force, warn_on_existing)
+        self.store_public_key(public_key_pem, force, warn_on_existing)
+
+    def get_private_key(self) -> str | None:
+        """Get private key from keystore.
+
+        Returns:
+            PEM-encoded private key, or None
+
+        Raises:
+            KeyringError: Keyring backend failed
+        """
+        try:
+            return self._keyring.get_password(self.service_name, PRIVATE_KEY_USERNAME)
+        except KeyringError as e:
+            raise KeyringError(f"Failed to retrieve private key: {e}") from e
+
+    def get_public_key(self) -> str | None:
+        """Get public key from keystore.
+
+        Returns:
+            PEM-encoded public key, or None
+
+        Raises:
+            KeyringError: Keyring backend failed
+        """
+        try:
+            return self._keyring.get_password(self.service_name, PUBLIC_KEY_USERNAME)
+        except KeyringError as e:
+            raise KeyringError(f"Failed to retrieve public key: {e}") from e
+
+    def get_keypair(self) -> tuple[str | None, str | None]:
+        """Get both private and public keys from keystore.
+
+        Returns:
+            (private_key_pem, public_key_pem), either may be None
+
+        Raises:
+            KeyringError: Keyring backend failed
+        """
+        private_key = self.get_private_key()
+        public_key = self.get_public_key()
+        return private_key, public_key
+
+    def delete_private_key(self) -> bool:
+        """Delete private key from keystore.
+
+        Returns:
+            True if deleted, False if didn't exist
+
+        Raises:
+            KeyringError: Keyring backend failed
+        """
+        if not self.key_exists(PRIVATE_KEY_USERNAME):
+            return False
+
+        try:
+            self._keyring.delete_password(self.service_name, PRIVATE_KEY_USERNAME)
+        except KeyringError as e:
+            raise KeyringError(f"Failed to delete private key: {e}") from e
+        else:
+            return True
+
+    def delete_public_key(self) -> bool:
+        """Delete public key from keystore.
+
+        Returns:
+            True if deleted, False if didn't exist
+
+        Raises:
+            KeyringError: Keyring backend failed
+        """
+        if not self.key_exists(PUBLIC_KEY_USERNAME):
+            return False
+
+        try:
+            self._keyring.delete_password(self.service_name, PUBLIC_KEY_USERNAME)
+        except KeyringError as e:
+            raise KeyringError(f"Failed to delete public key: {e}") from e
+        else:
+            return True
+
+    def delete_keypair(self) -> tuple[bool, bool]:
+        """Delete both private and public keys from keystore.
+
+        Returns:
+            (private_deleted, public_deleted) success flags
+
+        Raises:
+            KeyringError: Keyring backend failed
+        """
+        private_deleted = self.delete_private_key()
+        public_deleted = self.delete_public_key()
+        return private_deleted, public_deleted
+
+    def has_keypair(self) -> bool:
+        """Check if both private and public keys exist.
+
+        Returns:
+            True if both keys exist, False otherwise
+        """
+        return self.key_exists(PRIVATE_KEY_USERNAME) and self.key_exists(PUBLIC_KEY_USERNAME)
+
+    def get_backend_info(self) -> dict[str, str]:
+        """Get keyring backend information.
+
+        Returns:
+            Dictionary with backend info
+        """
+        return {
+            "name": self._keyring.name,
+            "class": self._keyring.__class__.__name__,
+            "module": self._keyring.__class__.__module__,
+        }
+
+
+
+================================================
+FILE: dsync/crypto/setup_certs.py
+================================================
+"""Self-signed cert + RSA key generation script."""
+
+import datetime
+import hashlib
+from pathlib import Path
+
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.x509.oid import NameOID
+
+
+def generate_self_signed_cert(cert_name: str = "cert.pem", key_name: str = "key.pem") -> None:
+    """Generates a self-signed X.509 certificate and a private RSA key.
+
+    Creates the cryptographic identity for the P2P node.
+    By default, the certificate is issued in the name of "P2PNode" and is valid for 10 years.
+    Both the certificate and the private key are stored in unencrypted PEM format on the hard drive.
+
+    Calculates the SHA-256 fingerprint of the public key and displays it on the console.
+    This fingerprint is essential, as it must be entered into the partner's `devices.yaml` (whitelist)
+    so that the devices can trust each other.
+
+    Args:
+        cert_name (str, optional): The file path/name for the certificate to be saved. Default: cert.pem.
+        key_name (str, optional): The file path/name for the private key to be saved. Default: key.pem.
+    """
+    # Generate private key
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+
+    # Build certificate
+    subject = issuer = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "P2P-Node")])
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(issuer)
+        .public_key(private_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(datetime.datetime.now(datetime.UTC))
+        .not_valid_after(
+            # Valid 10 years
+            datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=3650)
+        )
+        .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+        .sign(private_key, hashes.SHA256())
+    )
+
+    # Save on drive
+    with Path(key_name).open("wb") as f:
+        f.write(
+            private_key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.TraditionalOpenSSL,
+                encryption_algorithm=serialization.NoEncryption(),
+            )
+        )
+
+    with Path(cert_name).open("wb") as f:
+        f.write(cert.public_bytes(serialization.Encoding.PEM))
+
+    # Calculate fingerprint for yaml
+    public_key_bytes = cert.public_key().public_bytes(
+        encoding=serialization.Encoding.DER, format=serialization.PublicFormat.SubjectPublicKeyInfo
+    )
+    fingerprint = hashlib.sha256(public_key_bytes).hexdigest()
+
+    print(f"[+] Data {cert_name} and {key_name} were created!")
+    print(f"[!] Fingerprint for devices.yaml is:\n{fingerprint}")
+
+
+if __name__ == "__main__":
+    generate_self_signed_cert()
+
+
+
+================================================
+FILE: dsync/network/__init__.py
+================================================
+"""Network helpers for dsync: discovery and announcing of peers."""
+
+from __future__ import annotations
+
+from .discovery import (
+    DEFAULT_DISCOVERY_SECONDS,
+    SERVICE_TYPE,
+    FingerprintAnnouncer,
+    PeerDiscoveryRunner,
+)
+
+__all__ = [
+    "DEFAULT_DISCOVERY_SECONDS",
+    "SERVICE_TYPE",
+    "FingerprintAnnouncer",
+    "PeerDiscoveryRunner",
+]
+
+
+
+================================================
+FILE: dsync/network/_start_peer.py
+================================================
+"""Two-peer TLS demo running on localhost.
+
+Spawns one server peer and one client peer in separate threads, both bound to
+``127.0.0.1:9999``. Each peer loads its own certificate/key pair and trusts the
+other peer's public-key fingerprint via an in-memory ``AppState``.
+
+Run as a module from the repo root::
+
+    python -m dsync.network._start_peer
+
+Prerequisites:
+    - ``peer_a_cert.pem`` / ``peer_a_key.pem`` and ``peer_b_cert.pem`` /
+      ``peer_b_key.pem`` exist in the current working directory.
+    - The placeholder fingerprints below are replaced with the real SHA-256
+      fingerprints of the corresponding certificates.
+"""
+
+import asyncio
+from pathlib import Path
+
+from dsync.config import DevicesConfig, FoldersConfig, TrustedDevice
+from dsync.network.node import P2PNode
+from dsync.state import AppState
+
+PEER_A_FINGERPRINT = "PEER_A_FINGERPRINT"
+PEER_B_FINGERPRINT = "PEER_B_FINGERPRINT"
+
+HOST = "127.0.0.1"
+PORT = 9999
+
+
+def _build_demo_state() -> AppState:
+    """Build an in-memory ``AppState`` trusting both demo peers."""
+    devices = DevicesConfig(
+        trusted_devices=[
+            TrustedDevice(id="Peer A (Desktop)", fingerprint=PEER_A_FINGERPRINT),
+            TrustedDevice(id="Peer B (Laptop)", fingerprint=PEER_B_FINGERPRINT),
+        ]
+    )
+    return AppState(config_dir=Path(), folders=FoldersConfig(), devices=devices)
+
+
+async def start_server_peer() -> None:
+    """Start the server peer, listen on ``127.0.0.1:9999``, and accept one client."""
+    node = P2PNode(
+        is_server=True,
+        cert_path="peer_a_cert.pem",
+        key_path="peer_a_key.pem",
+        state=_build_demo_state(),
+    )
+    print("Peer A (Server) is starting...")
+    await node.start(HOST, PORT)
+
+
+async def start_client_peer() -> None:
+    """Start the client peer and connect to the server on ``127.0.0.1:9999``."""
+    await asyncio.sleep(1)
+    node = P2PNode(
+        is_server=False,
+        cert_path="peer_b_cert.pem",
+        key_path="peer_b_key.pem",
+        state=_build_demo_state(),
+    )
+    print("Peer B (client) is connecting...")
+    await node.start(HOST, PORT)
+
+
+async def main():
+    """Run both peers concurrently in the same asyncio event loop."""
+    await asyncio.gather(start_server_peer(), start_client_peer())
+
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\nDemo shut down by user.")
+
+
+
+================================================
+FILE: dsync/network/backup_direction.py
+================================================
+"""Backup-mode session: enforces source → peer, never the reverse.
+
+Policy:
+    In backup mode the local node (source) is the only side that may
+    *send* file data. The remote node (peer) is the only side that may
+    *receive* and write file data to disk. The peer has write-only
+    access to the configured destination path and never reads it back
+    to the source.
+
+This module is the backup-mode dispatcher. ``file_transfer`` stays a
+neutral primitive (send and receive are independent functions, so
+future mirror mode can reuse them bidirectionally). ``BackupSession``
+wraps that primitive and adds the direction policy:
+
+    * a SOURCE session can only ``send_files``; calling
+      ``receive_files`` raises ``DirectionViolationError``.
+    * a PEER session can only ``receive_files``; calling
+      ``send_files`` raises ``DirectionViolationError``.
+
+This way the policy lives in one named place and is enforced at
+runtime the moment any caller tries to flip direction in backup mode.
+"""
+
+from __future__ import annotations
+
+import asyncio
+from enum import Enum
+from pathlib import Path
+
+from dsync.network.file_transfer import recv_file, send_file
+
+
+class TransferRole(Enum):
+    """Role of the local node in a backup-mode sync.
+
+    SOURCE: holds the authoritative data, sends file frames.
+    PEER:   destination, only writes received files; never sends file data.
+    """
+
+    SOURCE = "source"
+    PEER = "peer"
+
+
+class DirectionViolationError(RuntimeError):
+    """Raised when a caller tries to flip direction in backup mode.
+
+    Examples:
+        * a PEER session calling ``send_files``
+        * a SOURCE session calling ``receive_files``
+
+    A correctly-behaving backup client never does either; seeing one
+    means the calling code is buggy or hostile.
+    """
+
+
+class BackupSession:
+    """Backup-mode dispatcher with runtime direction enforcement.
+
+    Holds the local node's :class:`TransferRole` for the session and
+    exposes role-checked file I/O methods. Callers obtain a session by
+    role and then drive the transfer through it; mismatched calls raise
+    :class:`DirectionViolationError` instead of silently doing the
+    wrong thing.
+    """
+
+    def __init__(self, role: TransferRole) -> None:
+        self._role = role
+
+    @property
+    def role(self) -> TransferRole:
+        return self._role
+
+    @classmethod
+    def as_source(cls) -> BackupSession:
+        """Open a backup session as the SOURCE (sends data)."""
+        return cls(TransferRole.SOURCE)
+
+    @classmethod
+    def as_peer(cls) -> BackupSession:
+        """Open a backup session as the PEER (writes received data)."""
+        return cls(TransferRole.PEER)
+
+    async def send_files(self, writer: asyncio.StreamWriter, files: tuple[Path, ...]) -> None:
+        """Send ``files`` to the peer.
+
+        Raises:
+            DirectionViolationError: If this session is not the SOURCE.
+                In backup mode only the source may send file data.
+        """
+        if self._role is not TransferRole.SOURCE:
+            raise DirectionViolationError(
+                "Peer attempted to send files in backup mode; "
+                "only the source may send (source → peer is the only legal direction)."
+            )
+        for src in files:
+            await send_file(writer, src)
+
+    async def receive_files(self, reader: asyncio.StreamReader, recv_dir: Path) -> None:
+        """Receive files from the source into ``recv_dir`` until EOF.
+
+        Raises:
+            DirectionViolationError: If this session is not the PEER.
+                In backup mode only the peer may receive file data.
+        """
+        if self._role is not TransferRole.PEER:
+            raise DirectionViolationError(
+                "Source attempted to receive files in backup mode; "
+                "only the peer may receive (source → peer is the only legal direction)."
+            )
+        while True:
+            try:
+                await recv_file(reader, recv_dir)
+            except asyncio.IncompleteReadError as e:
+                if e.partial:
+                    raise
+                return
+
+
+
+================================================
+FILE: dsync/network/config_exchange.py
+================================================
+"""Pre-sync config exchange between source and peer.
+
+Source decides which folders sync to which peers.
+Peer receives config, has no local configuration for this sync.
+Config is exchanged BEFORE any file transfer begins.
+"""
+
+import asyncio
+
+import yaml
+
+from dsync.config.folder import FoldersConfig
+from dsync.network.p2p_core import (
+    async_recv_config,
+    async_recv_config_ack,
+    async_send_config,
+    async_send_config_ack,
+)
+
+
+class ConfigExchange:
+    """Abstracts pre-sync config exchange protocol.
+
+    Source (server) sends its FoldersConfig to peer (client) before transfer.
+    Peer receives config and acknowledges. No validation yet [1].
+    """
+
+    async def exchange_as_source(
+        self,
+        writer: asyncio.StreamWriter,
+        reader: asyncio.StreamReader,
+        folders_config: FoldersConfig,
+    ) -> None:
+        """Send config from source to peer.
+
+        Args:
+            writer: Stream writer to peer.
+            reader: Stream reader from peer.
+            folders_config: Source's folder configuration.
+        """
+        config_yaml = yaml.safe_dump(
+            folders_config.model_dump(mode="json")
+        ).encode("utf-8")
+        print(f"[*] Sending config to peer ({len(config_yaml)} bytes)...")
+        await async_send_config(writer, config_yaml)
+        await async_recv_config_ack(reader)
+        print("[+] Config acknowledged by peer")
+
+    async def exchange_as_peer(
+        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+    ) -> FoldersConfig:
+        """Receive config from source on peer side.
+
+        Args:
+            reader: Stream reader from source.
+            writer: Stream writer to source.
+
+        Returns:
+            Received FoldersConfig from source.
+        """
+        print("[*] Receiving config from source...")
+        config_yaml = await async_recv_config(reader)
+        print(f"[+] Received config ({len(config_yaml)} bytes)")
+        config_dict = yaml.safe_load(config_yaml.decode("utf-8"))
+        received_config = FoldersConfig.model_validate(config_dict or {})
+        await async_send_config_ack(writer)
+        print("[*] Config acknowledged")
+        return received_config
+
+
+
+================================================
+FILE: dsync/network/discovery.py
+================================================
+"""Peer discovery utilities: announce and discover peers on the LAN."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+import socket
+import time
+from typing import TYPE_CHECKING
+
+from zeroconf import IPVersion, ServiceBrowser, ServiceInfo, ServiceListener, Zeroconf
+
+if TYPE_CHECKING:
+    # Imported for type checking only to avoid runtime import cycles
+    from dsync.identity import DiscoveredPeer, PeerMapStore
+
+SERVICE_TYPE = "_dsync-peer._tcp.local."
+DEFAULT_DISCOVERY_SECONDS = 10
+
+
+@dataclass(slots=True)
+class DiscoveryStats:
+    """Small runtime stats that can be shown in the CLI."""
+
+    events_seen: int = 0
+    peers_written: int = 0
+
+
+class _PeerListener(ServiceListener):
+    def __init__(
+        self,
+        zeroconf: Zeroconf,
+        store: PeerMapStore,
+        stats: DiscoveryStats,
+        own_fingerprint: str | None,
+    ) -> None:
+        self._zeroconf = zeroconf
+        self._store = store
+        self._stats = stats
+        self._own_fingerprint = own_fingerprint
+
+    def add_service(self, _zeroconf: Zeroconf, service_type: str, name: str) -> None:
+        """Handle a newly added service (callback from Zeroconf)."""
+        self._handle_event(service_type, name)
+
+    def update_service(self, _zeroconf: Zeroconf, service_type: str, name: str) -> None:
+        """Handle a service update (callback from Zeroconf)."""
+        self._handle_event(service_type, name)
+
+    def remove_service(self, _zeroconf: Zeroconf, _service_type: str, _name: str) -> None:
+        """Handle service removal (callback from Zeroconf).
+
+        The removal callback is only used to purge expired entries.
+        """
+        self._store.purge_expired()
+
+    def _handle_event(self, service_type: str, name: str) -> None:
+        info = self._zeroconf.get_service_info(service_type, name, timeout=1000)
+        if info is None:
+            self._store.purge_expired()
+            return
+
+        self._stats.events_seen += 1
+        self._store.purge_expired()
+
+        fingerprint = _read_fingerprint(info)
+        if not fingerprint or fingerprint == self._own_fingerprint:
+            return
+
+        ipv4 = _extract_ipv4(info)
+        if ipv4 is None:
+            return
+
+        self._store.upsert_peer(fingerprint=fingerprint, ipv4=ipv4)
+        self._stats.peers_written += 1
+
+
+def _read_fingerprint(info: ServiceInfo) -> str:
+    raw_value = info.properties.get(b"fingerprint")
+    if raw_value is None:
+        return ""
+    if isinstance(raw_value, bytes):
+        return raw_value.decode("utf-8", errors="ignore").strip()
+    if isinstance(raw_value, str):
+        return raw_value.strip()
+    return ""
+
+
+def _extract_ipv4(info: ServiceInfo) -> str | None:
+    if hasattr(info, "parsed_addresses"):
+        parsed = info.parsed_addresses(version=IPVersion.V4Only)
+        for value in parsed:
+            try:
+                return str(socket.inet_ntoa(socket.inet_aton(value)))
+            except OSError:
+                continue
+
+    for raw_addr in info.addresses:
+        if len(raw_addr) == 4:
+            try:
+                return socket.inet_ntoa(raw_addr)
+            except OSError:
+                continue
+    return None
+
+
+def _local_ipv4() -> str:
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.connect(("8.8.8.8", 80))
+            return str(sock.getsockname()[0])
+    except OSError:
+        hostname = socket.gethostname()
+        return socket.gethostbyname(hostname)
+
+
+class FingerprintAnnouncer:
+    """Announces the local fingerprint in the LAN via mDNS/Zeroconf."""
+
+    def __init__(self, fingerprint: str, service_port: int = 0) -> None:
+        """Create a new announcer for `fingerprint` broadcasting on `service_port`."""
+        self._fingerprint = fingerprint
+        self._service_port = service_port
+        self._zeroconf: Zeroconf | None = None
+        self._service_info: ServiceInfo | None = None
+
+    def start(self) -> None:
+        """Start announcing the fingerprint on the local network."""
+        if self._zeroconf is not None:
+            return
+
+        self._zeroconf = Zeroconf(ip_version=IPVersion.V4Only)
+        host = socket.gethostname()
+        service_name = f"{host}-{self._fingerprint[:8]}.{SERVICE_TYPE}"
+        address = socket.inet_aton(_local_ipv4())
+        self._service_info = ServiceInfo(
+            type_=SERVICE_TYPE,
+            name=service_name,
+            addresses=[address],
+            port=self._service_port,
+            properties={b"fingerprint": self._fingerprint.encode("utf-8")},
+            server=f"{host}.local.",
+        )
+        self._zeroconf.register_service(self._service_info)
+
+    def stop(self) -> None:
+        """Stop announcing and clean up Zeroconf resources."""
+        if self._zeroconf is None:
+            return
+
+        if self._service_info is not None:
+            self._zeroconf.unregister_service(self._service_info)
+        self._zeroconf.close()
+        self._zeroconf = None
+        self._service_info = None
+
+
+class PeerDiscoveryRunner:
+    """Runs a short discovery window and writes events into the peer map store."""
+
+    def __init__(self, store: PeerMapStore) -> None:
+        """Initialize with a `PeerMapStore` used to persist discovered peers."""
+        self._store = store
+
+    def discover(
+        self,
+        duration_seconds: int = DEFAULT_DISCOVERY_SECONDS,
+        own_fingerprint: str | None = None,
+    ) -> tuple[dict[str, DiscoveredPeer], DiscoveryStats]:
+        """Perform discovery for up to `duration_seconds` and return peers and stats."""
+        stats = DiscoveryStats()
+        zeroconf = Zeroconf(ip_version=IPVersion.V4Only)
+        listener = _PeerListener(
+            zeroconf=zeroconf,
+            store=self._store,
+            stats=stats,
+            own_fingerprint=own_fingerprint,
+        )
+        browser = ServiceBrowser(zeroconf, SERVICE_TYPE, listener)
+
+        end = time.monotonic() + max(duration_seconds, 0)
+        try:
+            while time.monotonic() < end:
+                time.sleep(0.2)
+        finally:
+            self._store.purge_expired()
+            browser.cancel()
+            zeroconf.close()
+
+        return self._store.list_peers(), stats
+
+
+
+================================================
+FILE: dsync/network/errors.py
+================================================
+"""Custom exceptions raised by the dsync network layer."""
+
+
+class TransferError(Exception):
+    """Base class for transfer-related errors."""
+
+
+class FrameValidationError(TransferError):
+    """Raised when a frame header or length is invalid."""
+
+
+class ChunkValidationError(TransferError):
+    """Raised when a file chunk violates the expected transfer contract."""
+
+
+class TransferIntegrityError(TransferError):
+    """Raised when the received data fails integrity checks."""
+
+
+class PeerAuthError(Exception):
+    """Raised when mutual TLS peer authentication fails."""
+
+
+
+================================================
+FILE: dsync/network/file_transfer.py
+================================================
+"""Async file transfer over an authenticated asyncio TLS stream."""
+
+import asyncio
+from dataclasses import dataclass
+import hashlib
+from pathlib import Path
+
+import yaml
+
+from dsync.integrity import compute_sha256
+from dsync.network.errors import (
+    ChunkValidationError,
+    FrameValidationError,
+    TransferIntegrityError,
+)
+from dsync.network.p2p_core import MsgType, async_recv_msg, async_send_msg
+
+DEFAULT_CHUNK_SIZE = 64 * 1024
+MAX_META_SIZE = 8 * 1024
+MAX_CHUNK_SIZE = DEFAULT_CHUNK_SIZE
+
+
+@dataclass(frozen=True)
+class FileMeta:
+    """Metadata announced by the sender before chunk frames arrive.
+
+    Attributes:
+        name: File basename. Used by the receiver to derive the destination
+            path under its target directory.
+        size: Total file size in bytes. Used as the stop condition for the
+            receiver's chunk loop.
+        sha256: Hex SHA-256 digest of the full file. Verified by the
+            receiver after all chunks have been written.
+    """
+
+    name: str
+    size: int
+    sha256: str
+
+    @classmethod
+    def from_yaml(cls, data: bytes) -> "FileMeta":
+        """Parse a YAML-encoded meta payload into a ``FileMeta`` instance."""
+        raw = yaml.safe_load(data.decode("utf-8"))
+        return cls(name=raw["name"], size=raw["size"], sha256=raw["sha256"])
+
+    def to_yaml(self) -> bytes:
+        """Serialize this metadata as a YAML-encoded byte payload."""
+        return yaml.dump(
+            {"name": self.name, "size": self.size, "sha256": self.sha256},
+        ).encode("utf-8")
+
+
+async def _recv_frame(reader: asyncio.StreamReader) -> tuple[MsgType, bytes]:
+    """Read one length-prefixed frame and validate its type and size.
+
+    Re-raises :class:`asyncio.IncompleteReadError` on a clean EOF at the
+    frame boundary so callers can detect a graceful end-of-stream.
+    """
+    raw_type, payload = await async_recv_msg(reader)
+    if raw_type is None or payload is None:
+        raise asyncio.IncompleteReadError(b"", 5)
+    try:
+        msg_type = MsgType(raw_type)
+    except ValueError as exc:
+        msg = "Unknown frame type"
+        raise FrameValidationError(msg) from exc
+
+    if msg_type == MsgType.FILE_META:
+        max_len = MAX_META_SIZE
+    elif msg_type == MsgType.FILE_CHUNK:
+        max_len = MAX_CHUNK_SIZE
+    else:
+        msg = "Unsupported frame type"
+        raise FrameValidationError(msg)
+
+    if len(payload) > max_len:
+        msg = "Frame payload exceeds maximum allowed size"
+        raise FrameValidationError(msg)
+    return msg_type, payload
+
+
+async def send_file(writer: asyncio.StreamWriter, reader: asyncio.StreamReader, path: Path) -> None:
+    """Send one file over an open asyncio TLS stream in chunks.
+
+    Sends a YAML meta frame (name, size, sha256) followed by raw chunk
+    frames of ``DEFAULT_CHUNK_SIZE`` bytes until the file is exhausted.
+
+    Args:
+        writer: Authenticated asyncio stream from the connection setup.
+        reader: Authenticated asyncion stream from the connection setup.
+        path: Source file to transmit.
+
+    Raises:
+        FileNotFoundError: If ``path`` does not exist or is not a regular file.
+        TransferIntegrityError: If peer's hash verification fails or wrong message type received.
+    """
+    if not path.is_file():
+        msg = f"Not a regular file: {path}"
+        raise FileNotFoundError(msg)
+
+    digest = await asyncio.to_thread(compute_sha256, path)
+    meta = FileMeta(name=path.name, size=path.stat().st_size, sha256=digest)
+    await async_send_msg(writer, MsgType.FILE_META, meta.to_yaml())
+
+    with path.open("rb") as f:
+        while chunk := await asyncio.to_thread(f.read, DEFAULT_CHUNK_SIZE):
+            await async_send_msg(writer, MsgType.FILE_CHUNK, chunk)
+
+    msg_type, peer_hash_bytes = await async_recv_msg(reader)
+    if msg_type is None or peer_hash_bytes is None:
+        msg = "Connection closed before receiving peer hash verification"
+        raise TransferIntegrityError(msg)
+    if msg_type != MsgType.FILE_VERIFY:
+        msg = f"Excpected FILE_VERIFY (type {MsgType.FILE_VERIFY}), got type {msg_type}"
+        raise TransferIntegrityError(msg)
+    
+    peer_hash = peer_hash_bytes.decode('utf-8')
+    if peer_hash != digest:
+        print(f"[!] WARNING: Hash mismatch for file '{path.name}'")
+        print(f"    Source hash: {digest}")
+        print(f"    Peer hash: {peer_hash}")
+    else:
+        print(f"[+] Verified: {path.name} (hash match confirmed my peer)")
+
+async def _recv_and_verify_chunks(
+    reader: asyncio.StreamReader, target: Path, meta: FileMeta
+) -> None:
+    """Read chunk frames into ``target`` and verify against ``meta.sha256``.
+
+    Args:
+        reader: Authenticated asyncio stream from the connection setup.
+        target: Destination file path. Parent directory must exist.
+        meta: Metadata previously read from the peer.
+
+    Raises:
+        TransferError: If a frame or chunk violates the transfer contract
+            or the SHA-256 digest does not match ``meta.sha256``.
+    """
+    digest = hashlib.sha256()
+    received = 0
+    with target.open("wb") as f:
+        while received < meta.size:
+            msg_type, payload = await _recv_frame(reader)
+            if msg_type != MsgType.FILE_CHUNK:
+                msg = "Unexpected frame during file transfer"
+                raise ChunkValidationError(msg)
+            remaining = meta.size - received
+            if not payload:
+                msg = "Received empty file chunk"
+                raise ChunkValidationError(msg)
+            if len(payload) > remaining:
+                msg = "Received chunk exceeds declared file size"
+                raise ChunkValidationError(msg)
+            await asyncio.to_thread(f.write, payload)
+            digest.update(payload)
+            received += len(payload)
+
+    computed_hash = digest.hexdigest()
+    if computed_hash != meta.sha256:
+        msg = "SHA-256 mismatch after transfer"
+        raise TransferIntegrityError(msg)
+
+    return computed_hash
+
+
+async def recv_file(reader: asyncio.StreamReader, writer: asyncio.StreamWriter, target_dir: Path) -> Path:
+    """Receive one file announced by a meta frame followed by chunk frames.
+
+    Reads the meta frame, derives the destination path from ``target_dir``
+    and ``meta.name`` (basename only), then receives and verifies the body
+    via ``_recv_and_verify_chunks``. After a successful verification, sends
+    the computed hash back to sender via FILE_VERIFY message for bidirectional
+    verification. Removes a partial target on any failure.
+
+    Args:
+        reader: Authenticated asyncio stream from the connection setup.
+        writer: Authenticated asyncio stream from the connection setup.
+        target_dir: Destination directory. Must exist.
+
+    Returns:
+        Absolute path of the written file.
+
+    Raises:
+        TransferError: If frames arrive in the wrong order or the SHA-256
+            digest of the received bytes does not match ``meta.sha256``.
+    """
+    msg_type, data = await _recv_frame(reader)
+    if msg_type != MsgType.FILE_META:
+        msg = "Missing file meta frame"
+        raise TransferIntegrityError(msg)
+    meta = FileMeta.from_yaml(data)
+
+    target = target_dir / Path(meta.name).name
+    try:
+        computed_hash = await _recv_and_verify_chunks(reader, target, meta)
+
+        await async_send_msg(writer, MsgType.FILE_VERIFY, computed_hash.encode('utf-8'))
+    except BaseException:
+        target.unlink(missing_ok=True)
+        raise
+
+    return target.resolve()
+
+
+
+================================================
+FILE: dsync/network/node.py
+================================================
+"""P2P node: TLS handshake, mutual auth and sync orchestration."""
+
+import asyncio
+import hashlib
+from pathlib import Path
+import ssl
+from typing import Any
+
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey, RSAPublicKey
+from cryptography.hazmat.primitives.serialization import (
+    Encoding,
+    PublicFormat,
+    load_der_public_key,
+    load_pem_private_key,
+)
+
+from dsync.network.errors import PeerAuthError
+from dsync.network.file_transfer import recv_file, send_file
+from dsync.state import AppState
+from dsync.config import FolderEntry
+
+from .p2p_core import (
+    MsgType,
+    async_recv_auth_msg,
+    async_recv_msg,
+    async_send_msg,
+    create_tls_context,
+    get_tls_channel_binding,
+)
+
+_SPKI_SIZE = 294  # RSA-2048 SubjectPublicKeyInfo DER
+_SIG_SIZE = 256  # RSA-2048 PSS signature
+RECEIVED_DIR = Path(__file__).resolve().parents[2] / "received-files"
+
+
+class P2PNode:
+    """Represents an endpoint (node) in the P2P network.
+
+    Encapsulates the logic for establishing a secure connection via TLS,
+    authenticating the remote party using certificate fingerprints,
+    and handling the actual data synchronization process.
+    """
+
+    def __init__(
+        self,
+        is_server: bool,
+        cert_path: str,
+        key_path: str,
+        state: AppState,
+        folder: FolderEntry | None = None,
+    ) -> None:
+        """Initializes a new P2P node.
+
+        Args:
+            is_server (bool): Specifies whether this node acts as a server (waits for connections)
+                            or as a client (establishes connections).
+            cert_path (str): The file path to ones own TLS certificate (.pem).
+            key_path (str): The file path to ones own private key (.pem).
+            state (AppState): The global application runtime state containing configurations.
+            folder (FolderEntry): Optional folder configuration for sync (client only).
+        """
+        self.is_server = is_server
+        self.cert_path = cert_path
+        self.key_path = key_path
+        self.state = state
+        self.folder = folder
+
+        self.trusted_devices: dict[str, str] = {
+            device.fingerprint: device.id for device in self.state.devices.trusted_devices
+        }
+
+        with Path(self.key_path).open("rb") as f:
+            raw_key = load_pem_private_key(f.read(), password=None)
+        if not isinstance(raw_key, RSAPrivateKey):
+            raise TypeError("Only RSA private keys are supported for peer auth")
+        if raw_key.key_size != 2048:
+            raise TypeError(f"Only RSA-2048 keys are supported, got RSA-{raw_key.key_size}")
+        self._own_private_key: RSAPrivateKey = raw_key
+        self._own_spki: bytes = raw_key.public_key().public_bytes(
+            Encoding.DER, PublicFormat.SubjectPublicKeyInfo
+        )
+
+    async def start(self, host: str, port: int) -> None:
+        """Starts the node as an async server or connects as an async client.
+
+        This handles the initial network connection and automatically wraps it in TLS
+        using the provided certificates.
+        """
+        # Show error messages
+        loop = asyncio.get_running_loop()
+
+        def custom_exception_handler(
+            _loop: asyncio.AbstractEventLoop, context: dict[str, Any]
+        ) -> None:
+            """Print TLS handshake and background errors raised inside the event loop."""
+            exc = context.get("exception")
+            if isinstance(exc, ssl.SSLError):
+                print(f"\n[!] TLS Handshake failed: {exc.reason} ({exc})")
+            else:
+                print(f"\n[!] Background error: {context.get('message')}")
+
+        loop.set_exception_handler(custom_exception_handler)
+
+        context = create_tls_context(self.is_server, self.cert_path, self.key_path)
+
+        if self.is_server:
+            server = await asyncio.start_server(
+                self.handle_secure_connection, host, port, ssl=context
+            )
+            print(f"[*] Server listens asynchroniously on {host}:{port}")
+            async with server:
+                await server.serve_forever()
+        else:
+            try:
+                reader, writer = await asyncio.open_connection(host, port, ssl=context)
+                await self.handle_secure_connection(reader, writer)
+            except Exception as e:
+                print(f"[!] Connection error: {e}")
+
+    def _sign_channel_binding(self, channel_binding: bytes) -> bytes:
+        """Sign the TLS channel binding with own RSA private key (PSS/SHA-256)."""
+        return self._own_private_key.sign(
+            channel_binding,
+            padding.PSS(
+                mgf=padding.MGF1(hashes.SHA256()),
+                salt_length=padding.PSS.MAX_LENGTH,
+            ),
+            hashes.SHA256(),
+        )
+
+    @staticmethod
+    def _verify_peer_signature(
+        public_key: RSAPublicKey, channel_binding: bytes, signature: bytes
+    ) -> None:
+        """Raise ValueError if signature does not verify against channel_binding."""
+        try:
+            public_key.verify(
+                signature,
+                channel_binding,
+                padding.PSS(
+                    mgf=padding.MGF1(hashes.SHA256()),
+                    salt_length=padding.PSS.MAX_LENGTH,
+                ),
+                hashes.SHA256(),
+            )
+        except Exception as exc:
+            raise ValueError(f"Peer signature invalid: {exc}") from exc
+
+    @staticmethod
+    def _pack_auth_msg(spki: bytes, signature: bytes) -> bytes:
+        """Pack SPKI + signature into a fixed-size payload: [294B spki][256B sig]."""
+        return spki + signature
+
+    @staticmethod
+    def _unpack_auth_msg(payload: bytes) -> tuple[bytes, bytes]:
+        """Unpack fixed-size payload into (spki, signature)."""
+        return payload[:_SPKI_SIZE], payload[_SPKI_SIZE:]
+
+    async def handle_secure_connection(
+        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+    ) -> None:
+        """Authenticate the peer and run a hello handshake over the secure streams.
+
+        Authentication is MITM-resistant via TLS channel binding:
+          1. Derive 32-byte channel binding from the live TLS session
+             (export_keying_material — unique per connection, bound to TLS master secret).
+          2. Sign the channel binding with own RSA private key.
+          3. Send own cert + signature atomically; receive peer's cert + signature.
+          4. Verify peer fingerprint against trusted list.
+          5. Verify peer's signature over *this* channel binding using peer's public key.
+
+        An active MITM has different channel bindings for each of its two tunnels.
+        It cannot forge a valid signature over the victim-side channel binding without
+        the victim's private key, so step 5 fails.
+        """
+        try:
+            channel_binding = get_tls_channel_binding(writer)
+            own_sig = self._sign_channel_binding(channel_binding)
+            auth_payload = self._pack_auth_msg(self._own_spki, own_sig)
+
+            await async_send_msg(writer, MsgType.AUTH, auth_payload)
+
+            peer_payload = await async_recv_auth_msg(reader)
+
+            peer_spki, peer_sig = self._unpack_auth_msg(peer_payload)
+
+            fingerprint = hashlib.sha256(peer_spki).hexdigest()
+            if fingerprint not in self.trusted_devices:
+                raise PeerAuthError(f"[-] Unknown device! Fingerprint: {fingerprint}")
+
+            peer_public_key = load_der_public_key(peer_spki)
+            if not isinstance(peer_public_key, RSAPublicKey):
+                raise PeerAuthError("Peer cert must use RSA key")
+            self._verify_peer_signature(peer_public_key, channel_binding, peer_sig)
+
+            peer_id = self.trusted_devices[fingerprint]
+            if "/" in peer_id or "\\" in peer_id or peer_id in {".", ".."}:
+                raise PeerAuthError(f"Refusing path-unsafe peer id: {peer_id!r}")
+            print(f"[+] Verified: {peer_id}")
+
+            # Handshake
+            if self.is_server:
+                await async_send_msg(
+                    writer, MsgType.HELLO, b"Hello from server. Data sync can start."
+                )
+                msg_type, answer = await async_recv_msg(reader)
+                if answer is None:
+                    raise PeerAuthError("Client closed connection before handshake reply.")
+                if msg_type != MsgType.HELLO:
+                    raise PeerAuthError(
+                        f"Expected hello (type {MsgType.HELLO}), got type {msg_type}"
+                    )
+                print(f"[*] Message from client: {answer.decode('utf-8')}")
+            else:
+                msg_type, msg = await async_recv_msg(reader)
+                if msg is None:
+                    raise PeerAuthError("Server closed connection before handshake greeting.")
+                if msg_type != MsgType.HELLO:
+                    raise PeerAuthError(
+                        f"Expected hello (type {MsgType.HELLO}), got type {msg_type}"
+                    )
+                print(f"[*] Message from server: {msg.decode('utf-8')}")
+                await async_send_msg(writer, MsgType.HELLO, b"Hello from client. I'm ready.")
+
+            await self.start_sync(reader, writer, peer_id)
+
+        except Exception as e:
+            print(f"[!] Connection error: {e}")
+        finally:
+            writer.close()
+            await writer.wait_closed()
+
+    async def start_sync(
+        self,
+        reader: asyncio.StreamReader,
+        writer: asyncio.StreamWriter,
+        peer_id: str,
+    ) -> None:
+        """Transfer the configured test files over the authenticated stream.
+
+        Server side receives files into ``RECEIVED_DIR/<peer_id>/<filename>`` until the
+        sender closes the stream. Client side sends each file in
+        ``TEST_FILES`` from ``TEST_FILES_DIR`` and lets the caller close
+        the writer to signal end-of-transfer (TLS streams do not support
+        ``write_eof``).
+
+        Args:
+            reader: Authenticated asyncio stream reader from the connection
+                setup.
+            writer: Authenticated asyncio stream writer from the connection
+                setup.
+            peer_id: Verified trusted-device id of the remote peer. Used as
+                the per-client subdirectory name on the server side.
+        """
+        if self.is_server:
+            peer_dir = RECEIVED_DIR / peer_id
+            peer_dir.mkdir(parents=True, exist_ok=True)
+            # TODO: future ticket — sender adds a folder/file id (from
+            # AppState.folders) to the meta frame. Receiver resolves
+            # id -> destination path via its own AppState.folders. Until
+            # then, every file lands flat in RECEIVED_DIR/<peer_id>.
+            while True:
+                try:
+                    await recv_file(reader, peer_dir)
+                except asyncio.IncompleteReadError as e:
+                    if e.partial:
+                        raise
+                    break
+        else:
+            folder_path = Path(self.folder.path)
+
+            if not folder_path.exists():
+                raise FileNotFoundError(f"Folder {folder_path} does not exist")
+
+            if not folder_path.is_dir():
+                raise NotADirectoryError(f"{folder_path} is not a directory")
+
+            files_to_send = list(folder_path.rglob("*")) if self.folder.recursive else list(folder_path.glob("*"))
+            files_to_send = [f for f in files_to_send if f.is_file()]
+
+            if not files_to_send:
+                print(f"[DEBUG] No files to send in {folder_path}")
+                return
+
+            print(f"[DEBUG] Sending {len(files_to_send)} file(s) from {folder_path}")
+            for file_path in files_to_send:
+                await send_file(writer, file_path)
+
+
+
+================================================
+FILE: dsync/network/p2p_core.py
+================================================
+"""Length-prefixed P2P framing and TLS context helpers."""
+
+import asyncio
+from enum import IntEnum
+import hashlib
+import ssl
+import struct
+from typing import cast
+
+from cryptography import x509
+from cryptography.hazmat.primitives import serialization
+
+# RSA-2048 SubjectPublicKeyInfo DER (294 B) + RSA-2048 PSS signature (256 B)
+_AUTH_PAYLOAD_SIZE = 550
+
+# Upper bound for a CONFIG frame payload (64 KiB is generous for YAML config data)
+MAX_CONFIG_SIZE = 64 * 1024
+
+
+class MsgType(IntEnum):
+    """Frame type identifier carried in the protocol header.
+
+    Values are assigned across all protocol phases (auth, handshake,
+    config exchange, file transfer) so the wire-type registry stays single-sourced.
+    Higher values are reserved for follow-up tickets (e.g. rsync-style
+    SYNC_HASHES and REQUEST_CHUNKS).
+    """
+
+    AUTH = 0
+    HELLO = 1
+    FILE_META = 2
+    FILE_CHUNK = 3
+    CONFIG = 4
+    CONFIG_ACK = 5
+    FILE_VERIFY = 6
+
+
+async def async_send_msg(writer: asyncio.StreamWriter, msg_type: int, data: bytes) -> None:
+    """Sends a message with a length prefix and type."""
+    # ! = Network Byte Order, B = unsigned char, I = unsigned int
+    header = struct.pack("!BI", msg_type, len(data))
+    writer.write(header + data)
+    await writer.drain()
+
+
+async def async_recv_msg(reader: asyncio.StreamReader) -> tuple[int | None, bytes | None]:
+    """Receives a message exactly based on its length."""
+    try:
+        header = await reader.readexactly(5)
+    except asyncio.IncompleteReadError:
+        return None, None
+
+    msg_type, length = struct.unpack("!BI", header)
+
+    try:
+        data = await reader.readexactly(length)
+    except asyncio.IncompleteReadError as err:  # check: B904 - raise from err
+        raise RuntimeError("Connection lost during reception.") from err
+
+    return msg_type, data
+
+
+async def async_recv_auth_msg(reader: asyncio.StreamReader) -> bytes:
+    """Receive a fixed-size auth message (type 0).
+
+    Rejects wrong msg_type or size mismatch before any payload allocation.
+    Returns the raw 550-byte payload: SPKI bytes || signature bytes.
+    """
+    try:
+        header = await reader.readexactly(5)
+    except asyncio.IncompleteReadError as err:  # check: B904 - raise from err
+        raise RuntimeError("Connection closed before auth message received.") from err
+
+    msg_type, length = struct.unpack("!BI", header)
+
+    if msg_type != MsgType.AUTH:
+        raise RuntimeError(f"Expected auth message (type {MsgType.AUTH}), got type {msg_type}")
+
+    if length != _AUTH_PAYLOAD_SIZE:
+        raise RuntimeError(
+            f"Auth message wrong size: got {length} B, expected {_AUTH_PAYLOAD_SIZE} B"
+        )
+
+    try:
+        return await reader.readexactly(_AUTH_PAYLOAD_SIZE)
+    except asyncio.IncompleteReadError as err:  # check: B904 - raise from err
+        raise RuntimeError("Connection lost during auth message reception.") from err
+
+
+def get_public_key_fingerprint(cert_der: bytes) -> str:
+    """Compute the SHA-256 fingerprint of the public key inside a DER cert.
+
+    Extracts the public key from an X.509 certificate in DER format and
+    calculates an SHA-256 fingerprint from it.
+
+    The fingerprint can be used to uniquely identify a certificate or a device
+    based on its public key and compare it with a list of trusted keys.
+
+    Args:
+        cert_der: The certificate as DER-encoded binary data.
+
+    Returns:
+        str: SHA-256 hash of the public key as a hex string.
+    """
+    # Load certificate from DER binary data
+    cert = x509.load_der_x509_certificate(cert_der)
+
+    # Extract public key from the certificate
+    public_key = cert.public_key()
+
+    public_key_bytes = public_key.public_bytes(
+        encoding=serialization.Encoding.DER, format=serialization.PublicFormat.SubjectPublicKeyInfo
+    )
+
+    return hashlib.sha256(public_key_bytes).hexdigest()
+
+
+def get_tls_channel_binding(writer: asyncio.StreamWriter) -> bytes:
+    """Derive 32 bytes of TLS session-unique material for app-layer auth.
+
+    Prevents MITM relay: attacker relaying cert bytes between two tunnels cannot
+    forge a signature over the victim-side binding without the victim's private key.
+
+    Python 3.13+: uses TLS exporter (RFC 5705) via export_keying_material.
+    Python <3.13:  SSLObject lacks export_keying_material; falls back to tls-unique
+                   channel binding (RFC 5929), which requires TLS 1.2.
+    """
+    ssl_object = writer.get_extra_info("ssl_object")
+    if ssl_object is None:
+        raise RuntimeError("No SSL object on writer — connection is not TLS")
+    if hasattr(ssl_object, "export_keying_material"):
+        return cast(
+            bytes, ssl_object.export_keying_material("dsync-peer-auth-v1", 32, context=None)
+        )
+    binding = ssl_object.get_channel_binding("tls-unique")
+    if binding is None:
+        raise RuntimeError(
+            "TLS channel binding unavailable — Python 3.13+ required for TLS 1.3, "
+            "or TLS 1.2 must be negotiated (see create_tls_context)"
+        )
+    return hashlib.sha256(binding).digest()
+
+
+async def async_send_config(writer: asyncio.StreamWriter, config_data: bytes) -> None:
+    """Send config data (e.g., FoldersConfig as YAML).
+
+    Args:
+        writer: Authenticated stream writer.
+        config_data: Serialized config (e.g., YAML bytes).
+    """
+    await async_send_msg(writer, MsgType.CONFIG, config_data)
+
+
+async def async_recv_config(reader: asyncio.StreamReader) -> bytes:
+    """Receive config data (e.g., FoldersConfig as YAML).
+
+    Reads the frame header first and rejects payloads that exceed
+    ``MAX_CONFIG_SIZE`` before allocating or reading the full body.
+
+    Args:
+        reader: Authenticated stream reader.
+
+    Returns:
+        Config data as bytes (e.g., YAML).
+
+    Raises:
+        RuntimeError: If message type is not CONFIG, or if the declared
+            payload length exceeds ``MAX_CONFIG_SIZE``.
+    """
+    try:
+        header = await reader.readexactly(5)
+    except asyncio.IncompleteReadError as err:
+        raise RuntimeError("Connection closed before config received") from err
+
+    msg_type, length = struct.unpack("!BI", header)
+
+    if msg_type != MsgType.CONFIG:
+        raise RuntimeError(f"Expected CONFIG (type {MsgType.CONFIG}), got type {msg_type}")
+
+    if length > MAX_CONFIG_SIZE:
+        raise RuntimeError(
+            f"Config payload too large: {length} B exceeds limit of {MAX_CONFIG_SIZE} B"
+        )
+
+    try:
+        return await reader.readexactly(length)
+    except asyncio.IncompleteReadError as err:
+        raise RuntimeError("Connection lost during config reception") from err
+
+
+async def async_send_config_ack(writer: asyncio.StreamWriter) -> None:
+    """Send config acknowledgement.
+
+    Args:
+        writer: Authenticated stream writer.
+    """
+    await async_send_msg(writer, MsgType.CONFIG_ACK, b"")
+
+
+async def async_recv_config_ack(reader: asyncio.StreamReader) -> None:
+    """Receive config acknowledgement.
+
+    Args:
+        reader: Authenticated stream reader.
+
+    Raises:
+        RuntimeError: If message type is not CONFIG_ACK.
+    """
+    msg_type, _ = await async_recv_msg(reader)  # check: RUF059 - unused data
+    if msg_type is None:
+        raise RuntimeError("Connection closed before config ack received")
+    if msg_type != MsgType.CONFIG_ACK:
+        raise RuntimeError(f"Expected CONFIG_ACK (type {MsgType.CONFIG_ACK}), got type {msg_type}")
+
+
+def create_tls_context(is_server: bool, cert_path: str, key_path: str) -> ssl.SSLContext:
+    """Build a TLS context with hostname checks and CA validation disabled.
+
+    CERT_NONE is required for self-signed certs (no shared CA). MITM resistance
+    is provided by the application-layer auth: each side signs the session's
+    TLS channel binding with its RSA private key, so an attacker relaying cert
+    bytes between two tunnels cannot forge the signature over the victim's
+    channel binding without the private key.
+    """
+    purpose = ssl.Purpose.CLIENT_AUTH if is_server else ssl.Purpose.SERVER_AUTH
+    context = ssl.create_default_context(purpose)
+
+    context.load_cert_chain(certfile=cert_path, keyfile=key_path)
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+
+    if not hasattr(ssl.SSLObject, "export_keying_material"):
+        # tls-unique channel binding (used as fallback on Python <3.13) requires TLS 1.2
+        context.maximum_version = ssl.TLSVersion.TLSv1_2
+
+    return context
+
+
+
+================================================
+FILE: dsync-config/devices.yaml
+================================================
+# Trusted-devices configuration.
+# The entries below are EXAMPLES only - uncomment and edit them to register
+# real trusted peer devices. Each entry needs a unique id and the
+# fingerprint of the peer's public key. Both fields must be unique across
+# all entries.
+
+# trusted_devices:
+#   # Example: another user's laptop.
+#   - id: laptop-anna
+#     fingerprint: <fingerprint-of-annas-laptop>
+
+#   # Example: a home-lab backup server.
+#   - id: server-basement
+#     fingerprint: <fingerprint-of-basement-server>
+
+
+
+================================================
+FILE: dsync-config/folders.yaml
+================================================
+# Folder sync configuration.
+# The entries below are EXAMPLES only - uncomment and edit them to configure
+# real folders or single files for synchronization. Each entry needs a unique
+# id, a path and a sync mode (mirror | backup-to-peer | backup-from-peer).
+
+# entries:
+#   # Example: sync a whole folder bidirectionally.
+#   - id: documents
+#     path: /home/user/documents
+#     mode: mirror
+#     devices:
+#       - laptop-anna
+#       - server-basement
+#     recursive: true
+
+#   # Example: one-way backup of a folder to other peers. (Sends backup)
+#   - id: notes
+#     path: /home/user/notes
+#     mode: backup-to-peer
+#     devices:
+#       - laptop-anna
+#       - server-basement
+#
+#   # Example: one-way backup of a folder from other peers. (Receives backup)
+#   - id: pictures
+#     path: /home/user/pictures
+#     mode: backup-from-peer
+#     # When devices is missing, then all trusted devices are used.
+#     recursive: false
+
+
+
+================================================
+FILE: scripts/validate_commit_msg.py
+================================================
+"""Validate Conventional Commit messages for pre-commit commit-msg hook."""
+
+from __future__ import annotations
+
+from pathlib import Path
+import re
+import sys
+
+CONVENTIONAL_COMMIT_PATTERN = re.compile(
+    r"^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)"
+    r"(\([a-zA-Z0-9._/-]+\))?"
+    r"!?"
+    r": "
+    r".+$"
+)
+
+ALLOWED_PREFIXES = (
+    "Merge ",
+    "Revert ",
+    "fixup! ",
+    "squash! ",
+    "Initial commit",
+)
+
+
+def _first_non_empty_line(content: str) -> str:
+    """Return the first non-empty line from commit message content."""
+    for line in content.splitlines():
+        stripped = line.strip()
+        if stripped:
+            return stripped
+    return ""
+
+
+def validate_message(subject: str) -> bool:
+    """Return True when a subject line follows allowed commit message formats."""
+    if subject.startswith(ALLOWED_PREFIXES):
+        return True
+    return bool(CONVENTIONAL_COMMIT_PATTERN.match(subject))
+
+
+def main() -> int:
+    """Validate commit message file passed by pre-commit and return exit code."""
+    if len(sys.argv) < 2:
+        print("Expected path to commit message file as first argument.")
+        return 1
+
+    commit_msg_path = Path(sys.argv[1])
+    if not commit_msg_path.exists():
+        print(f"Commit message file not found: {commit_msg_path}")
+        return 1
+
+    subject = _first_non_empty_line(commit_msg_path.read_text(encoding="utf-8"))
+    if validate_message(subject):
+        return 0
+
+    print("Invalid commit message subject.")
+    print("Use Conventional Commits, e.g.:")
+    print("  feat(sync): add peer discovery")
+    print("  fix(cli): handle missing config")
+    print("  docs(readme): document setup")
+    return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+
+
+
+================================================
+FILE: stubs/keyring.pyi
+================================================
+"""Type stubs for keyring module."""
+
+class KeyringError(Exception):
+    """Base exception for keyring errors."""
+
+class PasswordSetError(KeyringError):
+    """Exception raised when password setting fails."""
+
+class KeyringBackend:
+    """Base class for keyring backends."""
+
+    name: str
+
+    def get_password(self, service: str, username: str) -> str | None: ...
+    def set_password(self, service: str, username: str, password: str) -> None: ...
+    def delete_password(self, service: str, username: str) -> None: ...
+
+def get_keyring() -> KeyringBackend: ...
+
+
+
+================================================
+FILE: stubs/zeroconf.pyi
+================================================
+from typing import Any, Protocol
+
+class IPVersion:
+    V4Only: IPVersion
+
+class ServiceInfo:
+    type_: str
+    name: str
+    addresses: list[bytes]
+    properties: dict[bytes, Any]
+    server: str
+    port: int
+
+    def __init__(
+        self,
+        *,
+        type_: str | None = None,
+        name: str | None = None,
+        addresses: list[bytes] | None = None,
+        port: int = 0,
+        properties: dict[bytes, Any] | None = None,
+        server: str | None = None,
+    ) -> None: ...
+    def parsed_addresses(self, version: IPVersion) -> list[str]: ...
+
+class ServiceListener(Protocol):
+    def add_service(self, zeroconf: Zeroconf, service_type: str, name: str) -> None: ...
+    def update_service(self, zeroconf: Zeroconf, service_type: str, name: str) -> None: ...
+    def remove_service(self, zeroconf: Zeroconf, service_type: str, name: str) -> None: ...
+
+class Zeroconf:
+    def __init__(self, *, ip_version: IPVersion | None = None) -> None: ...
+    def register_service(self, info: ServiceInfo) -> None: ...
+    def unregister_service(self, info: ServiceInfo) -> None: ...
+    def get_service_info(self, type_: str, name: str, timeout: int = ...) -> ServiceInfo | None: ...
+    def close(self) -> None: ...
+
+class ServiceBrowser:
+    def __init__(self, zeroconf: Zeroconf, type_: str, listener: ServiceListener) -> None: ...
+    def cancel(self) -> None: ...
+
+
+
+================================================
+FILE: stubs/keyring/errors.pyi
+================================================
+"""Type stubs for keyring.errors module."""
+
+class KeyringError(Exception):
+    """Base exception for keyring errors."""
+
+class PasswordSetError(KeyringError):
+    """Exception raised when password setting fails."""
+
+__all__ = ["KeyringError", "PasswordSetError"]
+
+
+
+================================================
+FILE: test-files-to-send/hello.txt
+================================================
+Hello from dsync test files.
+This is a small ASCII text file used to demonstrate file transfer.
+
+
+
+================================================
+FILE: test-files-to-send/sample.json
+================================================
+{
+  "hello": "world",
+  "count": 3,
+  "items": ["alpha", "beta", "gamma"]
+}
+
+
+
+================================================
+FILE: tests/.gitkeep
+================================================
+[Empty file]
+
+
+================================================
+FILE: .github/workflows/deploy-mkdocs.yml
+================================================
+name: Deploy MkDocs
+
+on:
+  push:
+    branches: [main, dev]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ hashFiles('.github/workflows/deploy-mkdocs.yml') }}
+          restore-keys: |
+            pip-${{ runner.os }}-
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: 3.x
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - run: pip install properdocs mike mkdocs-material mkdocs-literate-nav "mkdocstrings[python]" pymdown-extensions
+
+      - name: Deploy versioned docs with mike
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            mike deploy --push -F properdocs.yml --update-aliases main latest
+            mike set-default --push -F properdocs.yml latest
+          elif [ "${{ github.ref_name }}" = "dev" ]; then
+            mike deploy --push -F properdocs.yml --update-aliases dev
+          fi
+
+
