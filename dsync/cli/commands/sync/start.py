@@ -43,7 +43,7 @@ def start_p2p_sync(
     is_server: bool = mode.lower() == "server"
     node = P2PNode(is_server, cert, key, state)
 
-    host = "0.0.0.0" if is_server else "127.0.0.1"
+    host = "0.0.0.0" if is_server else "127.0.0.1"  # nosec B104
     # LAN mode
     if is_server:
         info(f"Starting server on port {port}, waiting for connection...")
