@@ -10,10 +10,7 @@ import typer
 from dsync.cli.console import info, success, warn, error
 from dsync.identity import PeerMapStore
 from dsync.network.node import P2PNode
-<<<<<<< HEAD
-=======
 from dsync.config import SyncMode
->>>>>>> bd6e8c4e0c3e71020fec025a3f9677f4f23e1891
 
 if TYPE_CHECKING:
     from dsync.state import AppState
@@ -38,13 +35,10 @@ def sync(
     Without --folder-id: syncs all folders from folders.yaml.
     With --folder-id: syncs only the specific folder.
 
-<<<<<<< HEAD
-=======
     Only folders with mode 'mirror' or 'backup-to-peer' are sent.
     Folders with mode 'backup-from-peer' are receive-only and are skipped
     by this send command.
 
->>>>>>> bd6e8c4e0c3e71020fec025a3f9677f4f23e1891
     Each folder is synced with all its configured trusted devices.
     """
     state: AppState = ctx.obj
@@ -81,12 +75,7 @@ def sync(
     total_syncs, failed_syncs = asyncio.run(
         _sync_all_folders(folders_to_sync, peer_map, cert, key, state)
     )
-
-<<<<<<< HEAD
-    info(f"\n{'='*60}")
-=======
-    info(f"{'='*60}")
->>>>>>> bd6e8c4e0c3e71020fec025a3f9677f4f23e1891
+    info(f"\n{'=' * 60}")
     success(f"Completed: {total_syncs} successful sync(s)")
     if failed_syncs > 0:
         warn(f"Failed: {failed_syncs} sync(s)")
@@ -104,10 +93,6 @@ async def _sync_all_folders(
     failed_syncs = 0
 
     for idx, folder in enumerate(folders_to_sync, start=1):
-<<<<<<< HEAD
-        info(f"\n[{idx}/{len(folders_to_sync)}] Folder: {folder.id}")
-        info(f"    Path: {folder.path}")
-=======
         # Mode filter: only send mirror and backup-to-peer
         if folder.mode == SyncMode.BACKUP_FROM_PEER:
             info(f"[{idx}/{len(folders_to_sync)}] Folder: {folder.id} - SKIPPED (mode backup-from-peer: receive only)")
@@ -116,10 +101,9 @@ async def _sync_all_folders(
             warn(f"Unknown mode for folder {folder.id}, skipping")
             continue
 
-        info(f"[{idx}/{len(folders_to_sync)}] Folder: {folder.id}")
+        info(f"\n[{idx}/{len(folders_to_sync)}] Folder: {folder.id}")
         info(f"    Path: {folder.path}")
         info(f"    Mode: {folder.mode.value}")
->>>>>>> bd6e8c4e0c3e71020fec025a3f9677f4f23e1891
         info(f"    Peers: {', '.join(folder.devices)}")
 
         sync_tasks = []
@@ -220,8 +204,4 @@ async def _sync_folder_with_peer(
     except ConnectionRefusedError:
         raise Exception(f"Could not connect to {peer_ip}:{port} - peer may be offline")
     except Exception as e:
-<<<<<<< HEAD
         raise Exception(f"Sync failed: {e}") from e
-=======
-        raise Exception(f"Sync failed: {e}") from e
->>>>>>> bd6e8c4e0c3e71020fec025a3f9677f4f23e1891

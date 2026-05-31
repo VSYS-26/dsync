@@ -195,6 +195,9 @@ class ConfigExchange:
 class ConfigExchangeLegacy(ConfigExchange):
     """Backwards-compatible wrapper for old unidirectional exchange."""
 
+    def __init__(self) -> None:
+        """Initialize legacy exchange without config (methods accept config as args)."""
+
     async def exchange_as_source(
         self,
         reader: asyncio.StreamReader,

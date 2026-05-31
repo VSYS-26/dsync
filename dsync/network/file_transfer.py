@@ -90,7 +90,7 @@ async def send_file(writer: asyncio.StreamWriter, reader: asyncio.StreamReader, 
 
     Args:
         writer: Authenticated asyncio stream from the connection setup.
-        reader: Authenticated asyncion stream from the connection setup.
+        reader: Authenticated asyncio stream from the connection setup.
         path: Source file to transmit.
 
     Raises:
@@ -123,7 +123,7 @@ async def send_file(writer: asyncio.StreamWriter, reader: asyncio.StreamReader, 
             f"Hash mismatch: source={digest}, peer={peer_hash}"
         )
     else:
-        logger.info(f"[+] Verified: {path.name} (hash match confirmed my peer)")
+        logger.info(f"[+] Verified: {path.name} (hash match confirmed by peer)")
 
 async def _recv_and_verify_chunks(
     reader: asyncio.StreamReader, target: Path, meta: FileMeta

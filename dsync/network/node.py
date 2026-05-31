@@ -82,6 +82,8 @@ class P2PNode:
         self._own_spki: bytes = raw_key.public_key().public_bytes(
             Encoding.DER, PublicFormat.SubjectPublicKeyInfo
         )
+        own_fingerprint = hashlib.sha256(self._own_spki).hexdigest()
+        self._own_device_id = self.trusted_devices.get(own_fingerprint, own_fingerprint)
 
     async def start(self, host: str, port: int) -> None:
         """Starts the node as an async server or connects as an async client.
@@ -255,29 +257,42 @@ class P2PNode:
             peer_id: Verified trusted-device id of the remote peer. Used as
                 the per-client subdirectory name on the server side.
         """
-        exchange = ConfigExchange()
+        config_to_exchange = FoldersConfig(entries=[self.folder]) if self.folder else self.state.folders
+        exchange = ConfigExchange(config_to_exchange, self._own_device_id)
 
         if self.is_server:
-            # Server receives config first, validates modes
-            received_config = await exchange.exchange_as_peer(reader, writer)
+            peer_config = await exchange.exchange_and_validate(
+                writer, reader, peer_id, is_source=False
+            )
 
-            # Validate each folder config against local config
-            for remote_entry in received_config.entries:
-                local_entry = next((e for e in self.state.folders.entries if e.id == remote_entry.id), None)
+            for remote_entry in peer_config.entries:
+                local_entry = next(
+                    (e for e in self.state.folders.entries if e.id == remote_entry.id), None
+                )
                 if not local_entry:
-                    raise PeerAuthError(f"Peer wants to sync '{remote_entry.id}' but not configured locally")
+                    raise PeerAuthError(
+                        f"Peer wants to sync '{remote_entry.id}' but not configured locally"
+                    )
 
-                # Mode compatibility check
                 if remote_entry.mode == SyncMode.MIRROR:
                     if local_entry.mode != SyncMode.MIRROR:
-                        raise PeerAuthError(f"Mode mismatch for '{remote_entry.id}': peer has mirror, local has {local_entry.mode.value}")
+                        raise PeerAuthError(
+                            f"Mode mismatch for '{remote_entry.id}': peer has mirror, "
+                            f"local has {local_entry.mode.value}"
+                        )
                 elif remote_entry.mode == SyncMode.BACKUP_TO_PEER:
                     if local_entry.mode != SyncMode.BACKUP_FROM_PEER:
-                        raise PeerAuthError(f"Mode mismatch for '{remote_entry.id}': peer backup-to-peer requires local backup-from-peer, but local is {local_entry.mode.value}")
+                        raise PeerAuthError(
+                            f"Mode mismatch for '{remote_entry.id}': peer backup-to-peer "
+                            f"requires local backup-from-peer, but local is {local_entry.mode.value}"
+                        )
                 elif remote_entry.mode == SyncMode.BACKUP_FROM_PEER:
-                    raise PeerAuthError(f"Peer attempted to send in backup-from-peer mode for '{remote_entry.id}' - invalid direction")
+                    raise PeerAuthError(
+                        f"Peer attempted to send in backup-from-peer mode for "
+                        f"'{remote_entry.id}' - invalid direction"
+                    )
 
-            print(f"[+] Config validated for {len(received_config.entries)} folder(s)")
+            print(f"[+] Config validated for {len(peer_config.entries)} folder(s)")
 
             peer_dir = RECEIVED_DIR / peer_id
             peer_dir.mkdir(parents=True, exist_ok=True)
@@ -289,18 +304,12 @@ class P2PNode:
                         raise
                     break
         else:
-            # Client sends config first
             if not self.folder:
                 raise ValueError("Client mode requires folder to be set")
 
-            config_to_send = FoldersConfig(entries=[self.folder])
-            await exchange.exchange_as_source(writer, reader, config_to_send)
+            await exchange.exchange_and_validate(writer, reader, peer_id, is_source=True)
 
             folder_path = Path(self.folder.path)
-
-            if not folder_path.exists():
-                raise FileNotFoundError(f"Folder {folder_path} does not exist")
-
             if not folder_path.is_dir():
                 raise NotADirectoryError(f"{folder_path} is not a directory")
 
