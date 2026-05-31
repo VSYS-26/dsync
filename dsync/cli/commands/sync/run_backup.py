@@ -13,6 +13,7 @@ from dsync.config import SyncMode
 from dsync.identity import PeerMapStore
 from dsync.network.node import P2PNode
 
+
 if TYPE_CHECKING:
     from typing import Any
 
