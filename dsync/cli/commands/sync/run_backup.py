@@ -78,6 +78,7 @@ def sync(
         _sync_all_folders(folders_to_sync, peer_map, cert, key, state)
     )
 
+
     info(f"\n{'=' * 60}")
     success(f"Completed: {total_syncs} successful sync(s)")
     if failed_syncs > 0:
@@ -111,6 +112,7 @@ async def _sync_all_folders(
                 f"[{idx}/{len(folders_to_sync)}] Folder: {folder.id} - SKIPPED (no devices configured)"
             )
             continue
+
 
         info(f"\n[{idx}/{len(folders_to_sync)}] Folder: {folder.id}")
         info(f"    Path: {folder.path}")
