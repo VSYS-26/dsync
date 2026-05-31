@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 def sync(
     ctx: typer.Context,
     folder_id: Annotated[
-        str | None, typer.Option("--folder-id", "-f", help="Specific folder ID (or sync all")
+        str | None, typer.Option("--folder-id", "-f", help="Specific folder ID (or sync all)")
     ] = None,
     map_file: Annotated[Path, typer.Option("--map-file", help="Path to peer map JSON file")] = Path(
         ".dsync"
