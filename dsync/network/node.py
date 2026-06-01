@@ -16,12 +16,14 @@ from cryptography.hazmat.primitives.serialization import (
     load_pem_private_key,
 )
 
-from dsync.config import FolderEntry, FoldersConfig, SyncMode
-from dsync.network.config_exchange import ConfigExchangeLegacy
-from dsync.network.errors import PeerAuthError
-from dsync.network.file_transfer import recv_file, send_file
+from dsync.config import FolderEntry, FoldersConfig
 from dsync.network.config_exchange import ConfigExchange
 from dsync.network.config_validation import validate_peer_folder_config
+from dsync.network.errors import PeerAuthError
+from dsync.network.file_transfer import (
+    recv_folder_and_extract,
+    send_path_as_zip,
+)
 from dsync.state import AppState
 
 from .p2p_core import (
@@ -242,23 +244,10 @@ class P2PNode:
         writer: asyncio.StreamWriter,
         peer_id: str,
     ) -> None:
-        """Transfer the configured test files over the authenticated stream.
-
-        Server side receives files into ``RECEIVED_DIR/<peer_id>/<filename>`` until the
-        sender closes the stream. Client side sends each file in
-        ``TEST_FILES`` from ``TEST_FILES_DIR`` and lets the caller close
-        the writer to signal end-of-transfer (TLS streams do not support
-        ``write_eof``).
-
-        Args:
-            reader: Authenticated asyncio stream reader from the connection
-                setup.
-            writer: Authenticated asyncio stream writer from the connection
-                setup.
-            peer_id: Verified trusted-device id of the remote peer. Used as
-                the per-client subdirectory name on the server side.
-        """
-        config_to_exchange = FoldersConfig(entries=[self.folder]) if self.folder else self.state.folders
+        """Transfer the configured folder as a compressed zip."""
+        config_to_exchange = (
+            FoldersConfig(entries=[self.folder]) if self.folder else self.state.folders
+        )
         exchange = ConfigExchange(config_to_exchange, self._own_device_id)
 
         if self.is_server:
@@ -268,8 +257,7 @@ class P2PNode:
 
             if len(peer_config.entries) != 1:
                 raise PeerAuthError(
-                    f"Expected exactly one folder per sync session, got "
-                    f"{len(peer_config.entries)}"
+                    f"Expected exactly one folder per sync session, got {len(peer_config.entries)}"
                 )
 
             remote_entry = peer_config.entries[0]
@@ -285,36 +273,16 @@ class P2PNode:
 
             print(f"[+] Config validated for folder '{local_entry.id}'")
 
-            dest_root = Path(local_entry.path)
+            target = Path(local_entry.path)
+            is_file_target = target.is_file() or (target.suffix and not target.exists())
+            dest_root = target.parent if is_file_target else target
             dest_root.mkdir(parents=True, exist_ok=True)
-            while True:
-                try:
-                    await recv_file(reader, writer, dest_root)
-                except asyncio.IncompleteReadError as e:
-                    if e.partial:
-                        raise
-                    break
+
+            await recv_folder_and_extract(reader, writer, dest_root)
+            print(f"[+] '{local_entry.id}' received and extracted to {dest_root}")
         else:
             if not self.folder:
                 raise ValueError("Client mode requires folder to be set")
 
             await exchange.exchange_and_validate(writer, reader, peer_id, is_source=True)
-
-            folder_path = Path(self.folder.path)
-            if not folder_path.is_dir():
-                raise NotADirectoryError(f"{folder_path} is not a directory")
-
-            files_to_send = (
-                list(folder_path.rglob("*"))
-                if self.folder.recursive
-                else list(folder_path.glob("*"))
-            )
-            files_to_send = [f for f in files_to_send if f.is_file()]
-
-            if not files_to_send:
-                print(f"[DEBUG] No files to send in {folder_path}")
-                return
-
-            print(f"[DEBUG] Sending {len(files_to_send)} file(s) from {folder_path}")
-            for file_path in files_to_send:
-                await send_file(writer, reader, file_path, folder_path)
+            await send_path_as_zip(writer, reader, self.folder)

@@ -5,9 +5,12 @@ from dataclasses import dataclass
 import hashlib
 import logging
 from pathlib import Path, PurePosixPath
+import tempfile
+import zipfile
 
 import yaml
 
+from dsync.config import FolderEntry
 from dsync.integrity import compute_sha256
 from dsync.network.errors import (
     ChunkValidationError,
@@ -151,9 +154,7 @@ async def send_file(
 
     peer_hash = peer_hash_bytes.decode("utf-8")
     if peer_hash != digest:
-        raise TransferIntegrityError(
-            f"Hash mismatch: source={digest}, peer={peer_hash}"
-        )
+        raise TransferIntegrityError(f"Hash mismatch: source={digest}, peer={peer_hash}")
     logger.info(f"[+] Verified: {path.name} (hash match confirmed by peer)")
 
 
@@ -240,3 +241,58 @@ async def recv_file(
         raise
 
     return target.resolve()
+
+
+async def send_path_as_zip(
+    writer: asyncio.StreamWriter,
+    reader: asyncio.StreamReader,
+    entry: FolderEntry,
+) -> None:
+    """Pack entry.path (file or folder) into a temp zip and send it."""
+    src = Path(entry.path)
+    if not src.exists():
+        raise FileNotFoundError(f"Source not found: {src}")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir_path = Path(tmpdir)
+        zip_path = tmpdir_path / f"{entry.id}.zip"
+
+        def _make_zip() -> None:
+            with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+                if src.is_file():
+                    zf.write(src, src.name)
+                else:
+                    iterator = src.rglob("*") if entry.recursive else src.glob("*")
+                    for p in iterator:
+                        if p.is_file():
+                            arcname = p.relative_to(src).as_posix()
+                            zf.write(p, arcname)
+                    if entry.recursive:
+                        for d in src.rglob("*"):
+                            if d.is_dir() and not any(d.iterdir()):
+                                zf.writestr(d.relative_to(src).as_posix() + "/", "")
+
+        await asyncio.to_thread(_make_zip)
+        logger.info(f"[*] packed {src} -> {zip_path.name}")
+        await send_file(writer, reader, zip_path, tmpdir_path)
+
+
+async def recv_folder_and_extract(
+    reader: asyncio.StreamReader,
+    writer: asyncio.StreamWriter,
+    dest_root: Path,
+) -> None:
+    """Receive a zip file and extract it into dest_root."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir_path = Path(tmpdir)
+        zip_path = await recv_file(reader, writer, tmpdir_path)
+
+        if not zipfile.is_zipfile(zip_path):
+            raise TransferIntegrityError("Received file is not a valid zip archive")
+
+        def _extract() -> None:
+            with zipfile.ZipFile(zip_path, "r") as zf:
+                zf.extractall(dest_root)
+
+        await asyncio.to_thread(_extract)
+        logger.info(f"[+] Extracted zip to {dest_root}")
