@@ -10,9 +10,10 @@ import typer
 
 from dsync.cli.console import error, info, success, warn
 from dsync.config import SyncMode
+from dsync.crypto.keys import load_keypair, public_key_fingerprint
 from dsync.identity import PeerMapStore
+from dsync.network.discovery import FingerprintAnnouncer, PeerDiscoveryRunner
 from dsync.network.node import P2PNode
-
 
 if TYPE_CHECKING:
     from typing import Any
@@ -26,6 +27,14 @@ def sync(
     folder_id: Annotated[
         str | None, typer.Option("--folder-id", "-f", help="Specific folder ID (or sync all)")
     ] = None,
+    peer_host: Annotated[
+        str | None,
+        typer.Option("--peer-host", help="Peer IP/hostname (bypasses peer map)"),
+    ] = None,
+    discover_timeout: Annotated[
+        int,
+        typer.Option("--discover-timeout", help="Seconds to wait for peer discovery"),
+    ] = 8,
     map_file: Annotated[Path, typer.Option("--map-file", help="Path to peer map JSON file")] = Path(
         ".dsync"
     )
@@ -58,8 +67,12 @@ def sync(
     peer_store = PeerMapStore(file_path=map_file)
     peer_map = peer_store.list_peers()
 
-    if not peer_map:
-        warn("Peer map is empty. Run 'dsync peer discover' first.")
+    # Auto-discover peers if no explicit host given
+    if not peer_host:
+        peer_map = _auto_discover_peers(peer_store, discover_timeout)
+
+    if not peer_map and not peer_host:
+        warn("Peer map is empty. Run 'dsync peer discover' first, or use --peer-host.")
         raise typer.Exit(code=1)
 
     # Choose which folders should be synced
@@ -76,7 +89,7 @@ def sync(
 
     # Run async sync
     total_syncs, failed_syncs = asyncio.run(
-        _sync_all_folders(folders_to_sync, peer_map, cert, key, state)
+        _sync_all_folders(folders_to_sync, peer_map, peer_host, cert, key, state)
     )
 
 
@@ -86,9 +99,40 @@ def sync(
         warn(f"Failed: {failed_syncs} sync(s)")
 
 
+def _auto_discover_peers(
+    peer_store: PeerMapStore,
+    timeout: int,
+) -> dict[str, Any]:
+    """Announce our fingerprint and discover matching peers on the LAN."""
+    own_fingerprint: str | None = None
+    try:
+        _, public_key_pem = load_keypair()
+        own_fingerprint = public_key_fingerprint(public_key_pem)
+    except FileNotFoundError:
+        warn("No local keypair found, own fingerprint filtering disabled.")
+
+    if own_fingerprint:
+        info(f"Announcing as {own_fingerprint[:16]}...")
+
+    announcer = FingerprintAnnouncer(fingerprint=own_fingerprint or "")
+    announcer.start()
+
+    runner = PeerDiscoveryRunner(store=peer_store)
+    info("Discovering peer(s) on local network...")
+    peers, stats = runner.discover(
+        duration_seconds=timeout,
+        own_fingerprint=own_fingerprint,
+    )
+    announcer.stop()
+
+    info(f"Discovery complete: {stats.events_seen} events, {stats.peers_written} peers total")
+    return peers
+
+
 async def _sync_all_folders(
     folders_to_sync: list[FolderEntry],
     peer_map: dict[str, Any],
+    peer_host: str | None,
     cert: str,
     key: str,
     state: AppState,
@@ -135,6 +179,7 @@ async def _sync_all_folders(
                     folder=folder,
                     peer_fingerprint=peer_device.fingerprint,
                     peer_map=peer_map,
+                    peer_host=peer_host,
                     cert=cert,
                     key=key,
                     state=state,
@@ -175,6 +220,7 @@ async def _sync_folder_with_peer(
     folder: FolderEntry,
     peer_fingerprint: str,
     peer_map: dict[str, Any],
+    peer_host: str | None,
     cert: str,
     key: str,
     state: AppState,
@@ -185,20 +231,23 @@ async def _sync_folder_with_peer(
         folder: The folder configuration from folders.yaml
         peer_fingerprint: The peer's public key fingerprint
         peer_map: Dictionary of fingerprint -> peer info mappings
+        peer_host: Direct peer IP/hostname (bypasses peer_map if given)
         cert: Path to local certificate file
         key: Path to local private key file
         state: Application state
 
     Raises:
-        ValueError: If peer not found in peer map
+        ValueError: If peer not found in peer map and no peer_host given
         Exception: If sync fails
     """
-    # Find peer in map
-    if peer_fingerprint not in peer_map:
-        raise ValueError(f"Peer {peer_fingerprint} not found in peer map")
-
-    peer_info = peer_map[peer_fingerprint]
-    peer_ip = peer_info.ipv4
+    # Resolve peer IP: either from --peer-host or from peer map
+    if peer_host:
+        peer_ip = peer_host
+    else:
+        if peer_fingerprint not in peer_map:
+            raise ValueError(f"Peer {peer_fingerprint} not found in peer map")
+        peer_info = peer_map[peer_fingerprint]
+        peer_ip = peer_info.ipv4
 
     info(f"Connecting to {peer_fingerprint[:16]}... at {peer_ip}")
 
