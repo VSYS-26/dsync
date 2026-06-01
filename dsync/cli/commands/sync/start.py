@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 from typing import TYPE_CHECKING, Annotated
 
 import typer
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.serialization import load_pem_private_key
 
 from dsync.cli.console import error, info, success, warn
-from dsync.crypto.keys import load_keypair, public_key_fingerprint
 from dsync.identity import PeerMapStore
 from dsync.network.discovery import FingerprintAnnouncer, PeerDiscoveryRunner
 from dsync.network.node import P2PNode
@@ -16,6 +18,22 @@ from dsync.network.node import P2PNode
 if TYPE_CHECKING:
     from dsync.config import FolderEntry
     from dsync.state import AppState
+
+
+def _get_own_fingerprint(cert_path: str, key_path: str) -> str | None:
+    """Extract fingerprint from the TLS certificate (matches devices.yaml)."""
+    try:
+        from pathlib import Path
+
+        with Path(key_path).open("rb") as f:
+            key = load_pem_private_key(f.read(), password=None)
+        spki = key.public_key().public_bytes(
+            serialization.Encoding.DER,
+            serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+        return hashlib.sha256(spki).hexdigest()
+    except Exception:
+        return None
 
 
 def start_p2p_sync(
@@ -81,11 +99,17 @@ def start_p2p_sync(
 
     node = P2PNode(is_server, cert, key, state, folder=client_folder)
 
+    announcer = None
     if is_server:
         host_val = "0.0.0.0"  # nosec B104
         info(f"Starting server on port {port}, waiting for connection...")
+        server_fingerprint = _get_own_fingerprint(cert, key)
+        if server_fingerprint:
+            announcer = FingerprintAnnouncer(fingerprint=server_fingerprint)
+            announcer.start()
+            info(f"Announcing as {server_fingerprint[:16]}...")
     else:
-        host_val = host or _discover_peer_by_id(state, peer_device_id)
+        host_val = host or _discover_peer_by_id(state, peer_device_id, cert, key)
         info(f"Connecting to server on {host_val}:{port}...")
 
     try:
@@ -95,9 +119,14 @@ def start_p2p_sync(
         info("\nShutting down...")
     except Exception as e:
         info(f"\n[!] Sync stopped: {e}")
+    finally:
+        if announcer is not None:
+            announcer.stop()
 
 
-def _discover_peer_by_id(state: AppState, device_id: str | None) -> str:
+def _discover_peer_by_id(
+    state: AppState, device_id: str | None, cert: str = "cert.pem", key: str = "key.pem"
+) -> str:
     """Discover a peer's IP on the LAN by its device ID from devices.yaml.
 
     Falls back to 127.0.0.1 if no device_id given.
@@ -119,16 +148,12 @@ def _discover_peer_by_id(state: AppState, device_id: str | None) -> str:
 
     target_fingerprint = target_device.fingerprint
 
-    # Load our own fingerprint for filtering
-    own_fingerprint: str | None = None
-    try:
-        _, public_key_pem = load_keypair()
-        own_fingerprint = public_key_fingerprint(public_key_pem)
-    except FileNotFoundError:
-        warn("No local keypair found, own fingerprint filtering disabled.")
-
+    # Load our own fingerprint from the TLS certificate
+    own_fingerprint = _get_own_fingerprint(cert, key)
     if own_fingerprint:
         info(f"Announcing as {own_fingerprint[:16]}...")
+    else:
+        warn("No cert/key found, own fingerprint filtering disabled.")
 
     # Announce + discover
     announcer = FingerprintAnnouncer(fingerprint=own_fingerprint or "")

@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
 import typer
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.serialization import load_pem_private_key
 
 from dsync.cli.console import error, info, success, warn
 from dsync.config import SyncMode
-from dsync.crypto.keys import load_keypair, public_key_fingerprint
 from dsync.identity import PeerMapStore
 from dsync.network.discovery import FingerprintAnnouncer, PeerDiscoveryRunner
 from dsync.network.node import P2PNode
@@ -20,6 +22,20 @@ if TYPE_CHECKING:
 
     from dsync.config import FolderEntry, TrustedDevice
     from dsync.state import AppState
+
+
+def _get_own_fingerprint(cert_path: str, key_path: str) -> str | None:
+    """Extract fingerprint from the TLS certificate (matches devices.yaml)."""
+    try:
+        with Path(key_path).open("rb") as f:
+            key = load_pem_private_key(f.read(), password=None)
+        spki = key.public_key().public_bytes(
+            serialization.Encoding.DER,
+            serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+        return hashlib.sha256(spki).hexdigest()
+    except Exception:
+        return None
 
 
 def sync(
@@ -69,7 +85,7 @@ def sync(
 
     # Auto-discover peers if no explicit host given
     if not peer_host:
-        peer_map = _auto_discover_peers(peer_store, discover_timeout)
+        peer_map = _auto_discover_peers(peer_store, discover_timeout, cert, key)
 
     if not peer_map and not peer_host:
         warn("Peer map is empty. Run 'dsync peer discover' first, or use --peer-host.")
@@ -102,17 +118,15 @@ def sync(
 def _auto_discover_peers(
     peer_store: PeerMapStore,
     timeout: int,
+    cert: str = "cert.pem",
+    key: str = "key.pem",
 ) -> dict[str, Any]:
     """Announce our fingerprint and discover matching peers on the LAN."""
-    own_fingerprint: str | None = None
-    try:
-        _, public_key_pem = load_keypair()
-        own_fingerprint = public_key_fingerprint(public_key_pem)
-    except FileNotFoundError:
-        warn("No local keypair found, own fingerprint filtering disabled.")
-
+    own_fingerprint = _get_own_fingerprint(cert, key)
     if own_fingerprint:
         info(f"Announcing as {own_fingerprint[:16]}...")
+    else:
+        warn("No cert/key found, own fingerprint filtering disabled.")
 
     announcer = FingerprintAnnouncer(fingerprint=own_fingerprint or "")
     announcer.start()
