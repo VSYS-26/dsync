@@ -3,10 +3,14 @@
 import asyncio
 from dataclasses import dataclass
 import hashlib
+import logging
 from pathlib import Path, PurePosixPath
+import tempfile
+import zipfile
 
 import yaml
 
+from dsync.config import FolderEntry
 from dsync.integrity import compute_sha256
 from dsync.network.errors import (
     ChunkValidationError,
@@ -14,6 +18,8 @@ from dsync.network.errors import (
     TransferIntegrityError,
 )
 from dsync.network.p2p_core import MsgType, async_recv_msg, async_send_msg
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_CHUNK_SIZE = 64 * 1024
 MAX_META_SIZE = 8 * 1024
@@ -69,7 +75,6 @@ def _safe_resolve_under(dest_root: Path, rel_posix: str) -> Path:
         raise TransferIntegrityError(msg)
     target = dest_root.joinpath(*parts)
     resolved_root = dest_root.resolve()
-    # parent must resolve inside dest_root; target itself need not exist yet
     parent_resolved = target.parent.resolve() if target.parent.exists() else None
     if parent_resolved is not None and not parent_resolved.is_relative_to(resolved_root):
         msg = "File meta resolves outside destination folder"
@@ -106,7 +111,9 @@ async def _recv_frame(reader: asyncio.StreamReader) -> tuple[MsgType, bytes]:
     return msg_type, payload
 
 
-async def send_file(writer: asyncio.StreamWriter, path: Path, root: Path) -> None:
+async def send_file(
+    writer: asyncio.StreamWriter, reader: asyncio.StreamReader, path: Path, root: Path
+) -> None:
     """Send one file over an open asyncio TLS stream in chunks.
 
     Sends a YAML meta frame (path, size, sha256) followed by raw chunk
@@ -116,12 +123,14 @@ async def send_file(writer: asyncio.StreamWriter, path: Path, root: Path) -> Non
 
     Args:
         writer: Authenticated asyncio stream from the connection setup.
+        reader: Authenticated asyncio stream from the connection setup.
         path: Source file to transmit.
         root: Folder root the path should be relativized against.
 
     Raises:
         FileNotFoundError: If ``path`` does not exist or is not a regular file.
         ValueError: If ``path`` is not located under ``root``.
+        TransferIntegrityError: If peer's hash verification fails.
     """
     if not path.is_file():
         msg = f"Not a regular file: {path}"
@@ -135,10 +144,23 @@ async def send_file(writer: asyncio.StreamWriter, path: Path, root: Path) -> Non
         while chunk := await asyncio.to_thread(f.read, DEFAULT_CHUNK_SIZE):
             await async_send_msg(writer, MsgType.FILE_CHUNK, chunk)
 
+    msg_type, peer_hash_bytes = await async_recv_msg(reader)
+    if msg_type is None or peer_hash_bytes is None:
+        msg = "Connection closed before receiving peer hash verification"
+        raise TransferIntegrityError(msg)
+    if msg_type != MsgType.FILE_VERIFY:
+        msg = f"Expected FILE_VERIFY (type {MsgType.FILE_VERIFY}), got type {msg_type}"
+        raise TransferIntegrityError(msg)
+
+    peer_hash = peer_hash_bytes.decode("utf-8")
+    if peer_hash != digest:
+        raise TransferIntegrityError(f"Hash mismatch: source={digest}, peer={peer_hash}")
+    logger.info(f"[+] Verified: {path.name} (hash match confirmed by peer)")
+
 
 async def _recv_and_verify_chunks(
     reader: asyncio.StreamReader, target: Path, meta: FileMeta
-) -> None:
+) -> str:
     """Read chunk frames into ``target`` and verify against ``meta.sha256``.
 
     Args:
@@ -169,21 +191,29 @@ async def _recv_and_verify_chunks(
             digest.update(payload)
             received += len(payload)
 
-    if digest.hexdigest() != meta.sha256:
+    computed_hash = digest.hexdigest()
+    if computed_hash != meta.sha256:
         msg = "SHA-256 mismatch after transfer"
         raise TransferIntegrityError(msg)
 
+    return computed_hash
 
-async def recv_file(reader: asyncio.StreamReader, dest_root: Path) -> Path:
+
+async def recv_file(
+    reader: asyncio.StreamReader, writer: asyncio.StreamWriter, dest_root: Path
+) -> Path:
     """Receive one file announced by a meta frame followed by chunk frames.
 
     Reads the meta frame, re-anchors ``meta.path`` under ``dest_root``
     (rejecting absolute paths and ``..`` traversal), creates any missing
     parent directories, then receives and verifies the body via
-    ``_recv_and_verify_chunks``. Removes a partial target on any failure.
+    ``_recv_and_verify_chunks``. After successful verification, sends
+    the computed hash back to sender via FILE_VERIFY message for
+    bidirectional verification. Removes a partial target on any failure.
 
     Args:
         reader: Authenticated asyncio stream from the connection setup.
+        writer: Authenticated asyncio stream from the connection setup.
         dest_root: Destination folder root. Must exist.
 
     Returns:
@@ -203,8 +233,66 @@ async def recv_file(reader: asyncio.StreamReader, dest_root: Path) -> Path:
     target = _safe_resolve_under(dest_root, meta.path)
     target.parent.mkdir(parents=True, exist_ok=True)
     try:
-        await _recv_and_verify_chunks(reader, target, meta)
+        computed_hash = await _recv_and_verify_chunks(reader, target, meta)
+
+        await async_send_msg(writer, MsgType.FILE_VERIFY, computed_hash.encode("utf-8"))
     except BaseException:
         target.unlink(missing_ok=True)
         raise
+
     return target.resolve()
+
+
+async def send_path_as_zip(
+    writer: asyncio.StreamWriter,
+    reader: asyncio.StreamReader,
+    entry: FolderEntry,
+) -> None:
+    """Pack entry.path (file or folder) into a temp zip and send it."""
+    src = Path(entry.path)
+    if not src.exists():
+        raise FileNotFoundError(f"Source not found: {src}")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir_path = Path(tmpdir)
+        zip_path = tmpdir_path / f"{entry.id}.zip"
+
+        def _make_zip() -> None:
+            with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+                if src.is_file():
+                    zf.write(src, src.name)
+                else:
+                    iterator = src.rglob("*") if entry.recursive else src.glob("*")
+                    for p in iterator:
+                        if p.is_file():
+                            arcname = p.relative_to(src).as_posix()
+                            zf.write(p, arcname)
+                    if entry.recursive:
+                        for d in src.rglob("*"):
+                            if d.is_dir() and not any(d.iterdir()):
+                                zf.writestr(d.relative_to(src).as_posix() + "/", "")
+
+        await asyncio.to_thread(_make_zip)
+        logger.info(f"[*] packed {src} -> {zip_path.name}")
+        await send_file(writer, reader, zip_path, tmpdir_path)
+
+
+async def recv_folder_and_extract(
+    reader: asyncio.StreamReader,
+    writer: asyncio.StreamWriter,
+    dest_root: Path,
+) -> None:
+    """Receive a zip file and extract it into dest_root."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir_path = Path(tmpdir)
+        zip_path = await recv_file(reader, writer, tmpdir_path)
+
+        if not zipfile.is_zipfile(zip_path):
+            raise TransferIntegrityError("Received file is not a valid zip archive")
+
+        def _extract() -> None:
+            with zipfile.ZipFile(zip_path, "r") as zf:
+                zf.extractall(dest_root)
+
+        await asyncio.to_thread(_extract)
+        logger.info(f"[+] Extracted zip to {dest_root}")
