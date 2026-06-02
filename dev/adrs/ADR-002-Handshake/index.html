@@ -9,10 +9,6 @@
       
       
       
-        <link rel="prev" href="../ADR-%23%23%23-Template/">
-      
-      
-        <link rel="next" href="../../conventions/">
       
       
         
@@ -23,7 +19,7 @@
     
     
       
-        <title>ADR-001 - DSync</title>
+        <title>ADR-002: Lokal Discovery & Handshake - DSync</title>
       
     
     
@@ -76,7 +72,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#adr-001-yaml-fur-die-konfiguration" class="md-skip">
+        <a href="#adr-002-lokal-discovery-handshake" class="md-skip">
           Skip to content
         </a>
       
@@ -110,7 +106,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              ADR-001
+              ADR-002: Lokal Discovery &amp; Handshake
             
           </span>
         </div>
@@ -226,12 +222,10 @@
   
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
+      <li class="md-tabs__item">
         <a href="../" class="md-tabs__link">
           
   
@@ -368,31 +362,26 @@
       
   
   
-    
   
   
-  
     
     
     
     
-      
-        
-        
       
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
         
           
-          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
             
   
   
@@ -410,7 +399,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_2">
             <span class="md-nav__icon md-icon"></span>
             
@@ -481,31 +470,26 @@
                 
   
   
-    
   
   
-  
     
     
     
     
       
       
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_3" >
         
           
-          
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_3" checked>
-        
-          
-          <label class="md-nav__link" for="__nav_2_3" id="__nav_2_3_label" tabindex="">
+          <label class="md-nav__link" for="__nav_2_3" id="__nav_2_3_label" tabindex="0">
             
   
   
@@ -523,7 +507,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_3_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_3_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_2_3">
             <span class="md-nav__icon md-icon"></span>
             
@@ -538,37 +522,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    ADR-001
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../ADR-001-YAML/" class="md-nav__link">
         
   
   
@@ -584,126 +541,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#kontext" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Kontext
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#entscheidung" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Entscheidung
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#begrundung" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Begründung
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Begründung">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#betrachtete-alternativen" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Betrachtete Alternativen
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#konsequenzen" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Konsequenzen
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Konsequenzen">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#positiv" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Positiv
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#negativ-trade-offs" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Negativ / Trade-offs
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#referenzen" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Referenzen
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1241,13 +1078,52 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#referenzen" class="md-nav__link">
+  <a href="#detaillierte-spezifikation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Referenzen
+        Detaillierte Spezifikation
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Detaillierte Spezifikation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#broadcast" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Broadcast
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#verbindung-aufbauen-handshake" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verbindung aufbauen (Handshake)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ablaufdiagramm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ablaufdiagramm
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1268,26 +1144,34 @@
 
 
 
-<h1 id="adr-001-yaml-fur-die-konfiguration">ADR-001: YAML für die Konfiguration<a class="headerlink" href="#adr-001-yaml-fur-die-konfiguration" title="Permanent link">&para;</a></h1>
+<h1 id="adr-002-lokal-discovery-handshake">ADR-002: Lokal Discovery &amp; Handshake<a class="headerlink" href="#adr-002-lokal-discovery-handshake" title="Permanent link">&para;</a></h1>
 <ul>
-<li><strong>Datum:</strong> 2026-04-18</li>
-<li><strong>Status:</strong> <code>Akzeptiert</code></li>
+<li><strong>Datum:</strong> 2026-04-21</li>
+<li><strong>Status:</strong> <code>Vorgeschlagen</code></li>
 <li><strong>Erstellt von:</strong> Janis E.</li>
 </ul>
 <hr />
 <h2 id="kontext">Kontext<a class="headerlink" href="#kontext" title="Permanent link">&para;</a></h2>
-<p>Die Anwendung benötigt eine flexible und leicht anpassbare Konfiguration, die sowohl von Entwickler:innen als auch von technisch weniger versierten Nutzer:innen verstanden und bearbeitet werden kann.</p>
-<p>Ziel ist es, ein Format zu wählen, das:</p>
-<ul>
-<li>gut lesbar ist</li>
-<li>einfach erweitert werden kann</li>
-</ul>
+<p>Als Nutzer möchte ich vertrauenswürdige Geräte/Peers registrieren und verwalten können, ohne Nutzerkonten anlegen zu müssen. Vertrauenswürdige Geräte sollen jederzeit hinzugefügt oder entfernt werden können. Basierend auf dieser Registrierung soll eine sichere Verbindung zu den Peers möglich sein, ohne dass feste IP-Adressen erforderlich sind.</p>
+<p><strong>Akzeptanzkriterien:</strong>
+1. Keine Anlegung von Nutzerkonten erforderlich (keine persönlichen Daten wie E-Mail)
+2. Mehrere Geräte können als vertrauenswürdig registriert werden
+3. Registrierte Geräte können jederzeit entfernt werden
+4. Basierend auf der Registrierung sind sichere Verbindungen möglich</p>
 <h2 id="entscheidung">Entscheidung<a class="headerlink" href="#entscheidung" title="Permanent link">&para;</a></h2>
-<p>Für die Konfiguration der Anwendung wird YAML als Standardformat verwendet.</p>
+<p>Implementierung eines zwei-phasigen Ansatzes:</p>
+<ol>
+<li><strong>Broadcast-Phase</strong>: Clients versenden periodisch ihren Fingerprint per Broadcast/Multicast ins lokale Netz. Empfänger extrahieren die Absender-IP aus dem UDP-Paket und speichern die Zuordnung <code>Fingerprint → IP</code> lokal ab.</li>
+<li><strong>Handshake-Phase</strong>: Beim Verbindungsaufbau findet ein Public-Key-Austausch statt, gefolgt von beidseitiger Fingerprint-Verifikation. Nur wenn beide Seiten positive Verifikation bestätigen, wird die Verbindung aufgebaut.</li>
+</ol>
 <h2 id="begrundung">Begründung<a class="headerlink" href="#begrundung" title="Permanent link">&para;</a></h2>
-<p>YAML bietet eine sehr gute Balance zwischen Lesbarkeit und Ausdrucksstärke. Durch die reduzierte Syntax und die Möglichkeit, verschachtelte Strukturen übersichtlich darzustellen, eignet es sich besonders gut für Konfigurationsdateien.</p>
-<p>Im Vergleich zu anderen Formaten ist YAML weniger "visuell laut" (keine vielen Klammern oder Anführungszeichen) und dadurch einfacher zu erfassen - gerade bei komplexeren Konfigurationen.</p>
-<p>Zusätzlich wird YAML von vielen Tools im Ökosystem bereits unterstützt (z.B. CI/CD-Pipelines wie GitHub Actions oder Konfigurationssysteme wie Kubernetes), was die Integration erleichtert und den Lernaufwand reduziert.</p>
+<p>Dieser dezentralisierte Ansatz ermöglicht:
+- <strong>Keine Nutzerkonten erforderlich</strong>: Geräte werden direkt über ihre Fingerprints identifiziert und verwaltet
+- <strong>Einfache Peer-Verwaltung</strong>: Vertrauenswürdige Geräte können über eine lokale Registrierung ohne zentrale Infrastruktur verwaltet werden
+- <strong>Dynamische IP-Verwaltung</strong>: Keine festen IP-Adressen erforderlich – Geräte werden durch Fingerprints identifiziert
+- <strong>Gegenseitige Authentifizierung</strong> durch Fingerprint-Verifikation basierend auf Public Keys
+- <strong>Sicherheit durch Trust-by-Verification</strong>: Verbindungen sind nur zu registrierten Peers möglich
+- <strong>Skalierbarkeit</strong> im lokalen Netz ohne Single-Point-of-Failure</p>
 <h3 id="betrachtete-alternativen">Betrachtete Alternativen<a class="headerlink" href="#betrachtete-alternativen" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -1298,40 +1182,82 @@
 </thead>
 <tbody>
 <tr>
-<td>JSON</td>
-<td>Strengere Syntax (z.B. Pflicht für Anführungszeichen, keine Kommentare), dadurch weniger benutzerfreundlich für manuelle Bearbeitung</td>
+<td>Nur Fingerprint-basierte Zuordnung ohne Public-Key-Austausch</td>
+<td>Unzureichende Sicherheit, keine Forward-Secrecy, anfällig für Man-in-the-Middle-Attacken</td>
 </tr>
 <tr>
-<td>TOML</td>
-<td>Zwar lesbar, aber weniger verbreitet im bestehenden Tooling und weniger flexibel bei komplex verschachtelten Strukturen</td>
-</tr>
-<tr>
-<td>XML</td>
-<td>Sehr verbose und schwer lesbar, ungeeignet für einfache Konfigurationszwecke</td>
+<td>Einseitiges Vertrauensmodell</td>
+<td>Asymmetrisches Sicherheitsmodell, höheres Risiko bei Gerätekompromittierung</td>
 </tr>
 </tbody>
 </table>
 <h2 id="konsequenzen">Konsequenzen<a class="headerlink" href="#konsequenzen" title="Permanent link">&para;</a></h2>
 <h3 id="positiv">Positiv<a class="headerlink" href="#positiv" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Gute Lesbarkeit auch für größere Konfigurationsdateien</li>
-<li>Einfache manuelle Bearbeitung ohne spezielle Tools</li>
-<li>Unterstützung von Kommentaren direkt in der Datei</li>
-<li>Weit verbreitet in modernen DevOps- und Infrastruktur-Tools</li>
-<li>Gut geeignet für verschachtelte und strukturierte Daten</li>
+<li>Dezentralisierte Architektur ohne externe Abhängigkeiten</li>
+<li><strong>Keine festen IP-Adressen erforderlich</strong> – Geräte können sich frei im Netz bewegen</li>
+<li>Gegenseitige Authentifizierung erhöht Sicherheit</li>
+<li>Geringe Latenz durch direkten TCP-Verbindungsaufbau nach Entdeckung</li>
+<li>Einfache Trust-Verwaltung: nur vertrauenswürdige Fingerprints akzeptieren</li>
 </ul>
 <h3 id="negativ-trade-offs">Negativ / Trade-offs<a class="headerlink" href="#negativ-trade-offs" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Einrückungsbasierte Syntax kann zu Fehlern führen (Whitespace-sensitiv)</li>
-<li>Parsing kann komplexer sein als bei einfacheren Formaten wie JSON</li>
-<li>Unterschiedliche YAML-Versionen können zu Inkonsistenzen führen</li>
-<li>Weniger strikt → Fehler werden teilweise erst zur Laufzeit erkannt</li>
+<li>Periodische Broadcasts können zu erhöhtem Netzwerk-Traffic führen</li>
+<li>Discovery-Tabelle muss in Speicher verwaltet werden (bei vielen Geräten)</li>
+<li>Abhängig von Broadcast/Multicast-Unterstützung im Netzwerk</li>
+<li>Port-Management erforderlich (Standardport festlegen oder im Broadcast übertragen)</li>
+<li>Vertrauenswürdige Fingerprints müssen vorab bereitgestellt werden</li>
 </ul>
-<hr />
-<h2 id="referenzen">Referenzen<a class="headerlink" href="#referenzen" title="Permanent link">&para;</a></h2>
-<ul>
-<li><a href="https://kp2-jira.in.htwg-konstanz.de/browse/VSYS26T2-29">Research Ticket</a></li>
-</ul>
+<h2 id="detaillierte-spezifikation">Detaillierte Spezifikation<a class="headerlink" href="#detaillierte-spezifikation" title="Permanent link">&para;</a></h2>
+<h3 id="broadcast">Broadcast<a class="headerlink" href="#broadcast" title="Permanent link">&para;</a></h3>
+<p><strong>Kurzfassung:</strong> Clients verschicken ihren Fingerprint im Intervall ins Netz. Empfänger lesen die Absender-IP aus der Nachricht und speichern jede eingehende Zuordnung <code>Fingerprint → IP</code> lokal ab.</p>
+<p>Jeder Client sendet in einem festen Intervall eine Broadcast-/Multicast-Nachricht mit seinem Fingerprint ins lokale Netz. Empfänger lesen die Absender-IP aus dem UDP-Paket und speichern die Zuordnung <code>Fingerprint → IP</code> in einer Discovery-Tabelle – unabhängig davon, ob der Fingerprint bereits als vertrauenswürdig bekannt ist. Die Trust-Prüfung findet erst beim Verbindungsaufbau statt.</p>
+<p><em>Hinweis: Port sollte entweder im Broadcast mitgesendet oder als Standardport festgelegt werden (erforderlich für Verbindungsaufbau).</em></p>
+<h3 id="verbindung-aufbauen-handshake">Verbindung aufbauen (Handshake)<a class="headerlink" href="#verbindung-aufbauen-handshake" title="Permanent link">&para;</a></h3>
+<p><strong>Kurzfassung:</strong>
+- Beim Verbindungsaufbau tauschen beide Partner ihre Public Keys aus.
+- Aus den empfangenen Public Keys wird jeweils der Fingerprint berechnet und mit den lokal hinterlegten Fingerprints vertrauenswürdiger Geräte abgeglichen.
+- Nur wenn die Fingerprints auf beiden Seiten einem vertrauenswürdigen Gerät entsprechen, wird die Verbindung aufgebaut.</p>
+<p><strong>Im Detail:</strong></p>
+<ol>
+<li>Peer A ermittelt die aktuelle IP von Peer B aus der Discovery-Tabelle (anhand des Fingerprints).</li>
+<li>Peer A baut eine TCP-Verbindung zu dieser IP auf.</li>
+<li>Beide Partner tauschen ihre Public Keys aus.</li>
+<li>Beidseitige Fingerprint-Verifikation: Jede Seite berechnet den Fingerprint des empfangenen Public Keys und vergleicht ihn mit dem lokal gespeicherten, vertrauenswürdigen Fingerprint der Gegenseite.</li>
+<li>Nur wenn <strong>beide</strong> Seiten ein positives Ergebnis haben, gilt die Gegenseite als authentifiziert und die Nutzdaten werden anschließend mit dem Public Key des Empfängers verschlüsselt.</li>
+</ol>
+<h3 id="ablaufdiagramm">Ablaufdiagramm<a class="headerlink" href="#ablaufdiagramm" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code>sequenceDiagram
+    autonumber
+    participant A as Peer A
+    participant Net as Lokales Netz
+    participant B as Peer B
+
+    Note over A,B: Phase 1 – Broadcast (periodisch)
+
+    A-&gt;&gt;Net: Broadcast { Fingerprint_A }
+    Net-&gt;&gt;B: Broadcast empfangen (Absender-IP = IP_A)
+    B-&gt;&gt;B: speichere Fingerprint_A → IP_A
+
+    B-&gt;&gt;Net: Broadcast { Fingerprint_B }
+    Net-&gt;&gt;A: Broadcast empfangen (Absender-IP = IP_B)
+    A-&gt;&gt;A: speichere Fingerprint_B → IP_B
+
+    Note over A,B: Phase 2 – Verbindungsaufbau &amp; Handshake
+
+    A-&gt;&gt;B: TCP-Connect zu IP_B
+    A-&gt;&gt;B: PublicKey_A
+    B-&gt;&gt;A: PublicKey_B
+
+    A-&gt;&gt;A: Hash(PublicKey_B) == Fingerprint_B ?
+    B-&gt;&gt;B: Hash(PublicKey_A) == Fingerprint_A ?
+
+    alt beide Fingerprints gültig
+        Note over A,B: Phase 3 – Kommunikation
+    else Verifikation fehlgeschlagen
+        A--xB: Verbindung abbrechen
+    end
+</code></pre></div>
 
 
 
