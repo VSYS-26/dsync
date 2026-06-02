@@ -11,6 +11,7 @@ nav:
       - Verzweigungsmodell: conventions/branching-model.md
       - CLI: conventions/cli.md
       - Setup: conventions/setup.md
+      - Tests: conventions/testing.md
   - Besprechungen:
       - meetings/index.md
       - Protokoll – 18.04.2026: meetings/Meetings Nodes.md

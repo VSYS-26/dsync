@@ -7,3 +7,4 @@ Hier sind die Projektkonventionen und Arbeitsregeln dokumentiert.
 - [Verzweigungsmodell](branching-model.md)
 - [CLI](cli.md)
 - [Setup](setup.md)
+- [Tests](testing.md)
