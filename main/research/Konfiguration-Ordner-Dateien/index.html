@@ -1105,9 +1105,16 @@
 <td><code>backup-to-peer</code></td>
 <td>Nur das lokale Gerät überträgt Daten an den Peer. Der Peer lädt nichts zurück. Geeignet als einseitiges Backup.</td>
 </tr>
+<tr>
+<td><code>backup-from-peer</code></td>
+<td>Nur der Peer überträgt Daten zum lokalen Gerät. Das lokale Gerät lädt nichts zurück. Gegenstück zu <code>backup-to-peer</code>.</td>
+</tr>
+<tr>
+<td>---</td>
+<td></td>
+</tr>
 </tbody>
 </table>
-<hr />
 <h2 id="konfiguration-eines-ordners">Konfiguration eines Ordners<a class="headerlink" href="#konfiguration-eines-ordners" title="Permanent link">&para;</a></h2>
 <p>Ein Ordner-Eintrag besteht aus:</p>
 <table>
@@ -1131,15 +1138,27 @@
 </tr>
 <tr>
 <td><code>mode</code></td>
-<td>Sync-Modus (<code>mirror</code> oder <code>backup-to-peer</code>)</td>
+<td>Sync-Modus (<code>mirror</code>, <code>backup-to-peer</code> oder <code>backup-from-peer</code>)</td>
 <td>✅</td>
+</tr>
+<tr>
+<td><code>devices</code></td>
+<td>Liste von Geräten, die diesen Ordner synchronisieren sollen (z. B. <code>["laptop", "desktop"]</code>). Angegeben werden dabei die device-ids. Falls das Feld weggelassen wird, werden alle trusted devices aus <code>devices.yaml</code> verwendet.</td>
+<td>❌</td>
+</tr>
+<tr>
+<td><strong>Beispiel:</strong></td>
+<td></td>
+<td></td>
 </tr>
 </tbody>
 </table>
-<p><strong>Beispiel:</strong></p>
 <div class="highlight"><pre><span></span><code><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">dokumente</span>
 <span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/home/user/Dokumente</span>
 <span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mirror</span>
+<span class="nt">devices</span><span class="p">:</span><span class="w"> </span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">laptop</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">desktop</span>
 </code></pre></div>
 <hr />
 <h2 id="konfiguration-einer-einzelnen-datei">Konfiguration einer einzelnen Datei<a class="headerlink" href="#konfiguration-einer-einzelnen-datei" title="Permanent link">&para;</a></h2>
@@ -1160,13 +1179,18 @@
 </tr>
 <tr>
 <td><code>path</code></td>
-<td>Pfad zur Datei auf dem lokalen Gerät</td>
+<td>Pfad zu der Datei auf dem lokalen Gerät</td>
 <td>✅</td>
 </tr>
 <tr>
 <td><code>mode</code></td>
-<td>Sync-Modus (<code>mirror</code> oder <code>backup-to-peer</code>)</td>
+<td>Sync-Modus (<code>mirror</code>, <code>backup-to-peer</code> oder <code>backup-from-peer</code>)</td>
 <td>✅</td>
+</tr>
+<tr>
+<td><code>devices</code></td>
+<td>Liste von Geräten, die diese Datei synchronisieren sollen (z. B. <code>["laptop", "desktop"]</code>). Angegeben werden dabei die device-ids. Falls das Feld weggelassen wird, werden alle trusted devices aus <code>devices.yaml</code> verwendet.</td>
+<td>❌</td>
 </tr>
 </tbody>
 </table>
@@ -1182,6 +1206,9 @@
 <span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">dokumente</span>
 <span class="w">    </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/home/user/Dokumente</span>
 <span class="w">    </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mirror</span>
+<span class="w">    </span><span class="nt">devices</span><span class="p">:</span><span class="w"> </span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">laptop</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">desktop</span>
 
 <span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">notizen</span>
 <span class="w">    </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/home/user/notizen.txt</span>
@@ -1197,7 +1224,8 @@
 <ul>
 <li>Jede <code>id</code> muss eindeutig sein – zwei Einträge dürfen nicht denselben Namen haben.</li>
 <li>Der angegebene <code>path</code> muss auf dem lokalen Gerät existieren.</li>
-<li>Der <code>mode</code> darf nur <code>mirror</code> oder <code>backup-to-peer</code> sein.</li>
+<li>Der <code>mode</code> darf nur <code>mirror</code>, <code>backup-to-peer</code> oder <code>backup-from-peer</code> sein.</li>
+<li>Die <code>devices</code>-Liste darf nur gültige device-ids enthalten, die in <code>devices.yaml</code> definiert sind oder ansonsten weggelassen werden, um alle trusted devices zu verwenden.</li>
 </ul>
 
 

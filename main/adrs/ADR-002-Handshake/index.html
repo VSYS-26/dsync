@@ -19,7 +19,7 @@
     
     
       
-        <title>Konfigurationsspezifikation – Ordner & Dateien - DSync</title>
+        <title>ADR-002: Lokal Discovery & Handshake - DSync</title>
       
     
     
@@ -72,7 +72,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#konfigurationsspezifikation-ordner-dateien" class="md-skip">
+        <a href="#adr-002-lokal-discovery-handshake" class="md-skip">
           Skip to content
         </a>
       
@@ -106,7 +106,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Konfigurationsspezifikation – Ordner &amp; Dateien
+              ADR-002: Lokal Discovery &amp; Handshake
             
           </span>
         </div>
@@ -226,7 +226,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../adrs/" class="md-tabs__link">
+        <a href="../" class="md-tabs__link">
           
   
   
@@ -286,7 +286,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../" class="md-tabs__link">
+        <a href="../../research/" class="md-tabs__link">
           
   
   
@@ -417,7 +417,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../adrs/" class="md-nav__link">
+      <a href="../" class="md-nav__link">
         
   
   
@@ -445,7 +445,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../adrs/ADR-%23%23%23-Template/" class="md-nav__link">
+      <a href="../ADR-%23%23%23-Template/" class="md-nav__link">
         
   
   
@@ -525,7 +525,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../adrs/ADR-001-YAML/" class="md-nav__link">
+      <a href="../ADR-001-YAML/" class="md-nav__link">
         
   
   
@@ -906,7 +906,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../" class="md-nav__link">
+      <a href="../../research/" class="md-nav__link">
         
   
   
@@ -934,7 +934,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../VSYS26T2-27/" class="md-nav__link">
+      <a href="../../research/VSYS26T2-27/" class="md-nav__link">
         
   
   
@@ -989,10 +989,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#uberblick" class="md-nav__link">
+  <a href="#kontext" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Überblick
+        Kontext
       
     </span>
   </a>
@@ -1000,10 +1000,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#sync-modi" class="md-nav__link">
+  <a href="#entscheidung" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Sync-Modi
+        Entscheidung
       
     </span>
   </a>
@@ -1011,57 +1011,119 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#konfiguration-eines-ordners" class="md-nav__link">
+  <a href="#begrundung" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Konfiguration eines Ordners
+        Begründung
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Begründung">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#betrachtete-alternativen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Betrachtete Alternativen
       
     </span>
   </a>
   
 </li>
+        
+      </ul>
+    </nav>
+  
+</li>
       
         <li class="md-nav__item">
-  <a href="#konfiguration-einer-einzelnen-datei" class="md-nav__link">
+  <a href="#konsequenzen" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Konfiguration einer einzelnen Datei
+        Konsequenzen
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Konsequenzen">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#positiv" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Positiv
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#gesamte-konfigurationsdatei" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#negativ-trade-offs" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Gesamte Konfigurationsdatei
+        Negativ / Trade-offs
       
     </span>
   </a>
   
 </li>
+        
+      </ul>
+    </nav>
+  
+</li>
       
         <li class="md-nav__item">
-  <a href="#offene-punkte" class="md-nav__link">
+  <a href="#detaillierte-spezifikation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Offene Punkte
+        Detaillierte Spezifikation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Detaillierte Spezifikation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#broadcast" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Broadcast
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#regeln" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#verbindung-aufbauen-handshake" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Regeln
+        Verbindung aufbauen (Handshake)
       
     </span>
   </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ablaufdiagramm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ablaufdiagramm
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1082,123 +1144,120 @@
 
 
 
-<h1 id="konfigurationsspezifikation-ordner-dateien">Konfigurationsspezifikation – Ordner &amp; Dateien<a class="headerlink" href="#konfigurationsspezifikation-ordner-dateien" title="Permanent link">&para;</a></h1>
-<p>Dieses Dokument beschreibt, wie Ordner und Dateien in dsync konfiguriert werden.</p>
+<h1 id="adr-002-lokal-discovery-handshake">ADR-002: Lokal Discovery &amp; Handshake<a class="headerlink" href="#adr-002-lokal-discovery-handshake" title="Permanent link">&para;</a></h1>
+<ul>
+<li><strong>Datum:</strong> 2026-04-21</li>
+<li><strong>Status:</strong> <code>Vorgeschlagen</code></li>
+<li><strong>Erstellt von:</strong> Janis E.</li>
+</ul>
 <hr />
-<h2 id="uberblick">Überblick<a class="headerlink" href="#uberblick" title="Permanent link">&para;</a></h2>
-<p>Ein Nutzer kann sowohl <strong>ganze Ordner</strong> als auch <strong>einzelne Dateien</strong> zur Synchronisierung hinzufügen. Jeder Eintrag bekommt einen eindeutigen Namen, einen Pfad und einen Sync-Modus.</p>
-<hr />
-<h2 id="sync-modi">Sync-Modi<a class="headerlink" href="#sync-modi" title="Permanent link">&para;</a></h2>
+<h2 id="kontext">Kontext<a class="headerlink" href="#kontext" title="Permanent link">&para;</a></h2>
+<p>Als Nutzer möchte ich vertrauenswürdige Geräte/Peers registrieren und verwalten können, ohne Nutzerkonten anlegen zu müssen. Vertrauenswürdige Geräte sollen jederzeit hinzugefügt oder entfernt werden können. Basierend auf dieser Registrierung soll eine sichere Verbindung zu den Peers möglich sein, ohne dass feste IP-Adressen erforderlich sind.</p>
+<p><strong>Akzeptanzkriterien:</strong>
+1. Keine Anlegung von Nutzerkonten erforderlich (keine persönlichen Daten wie E-Mail)
+2. Mehrere Geräte können als vertrauenswürdig registriert werden
+3. Registrierte Geräte können jederzeit entfernt werden
+4. Basierend auf der Registrierung sind sichere Verbindungen möglich</p>
+<h2 id="entscheidung">Entscheidung<a class="headerlink" href="#entscheidung" title="Permanent link">&para;</a></h2>
+<p>Implementierung eines zwei-phasigen Ansatzes:</p>
+<ol>
+<li><strong>Broadcast-Phase</strong>: Clients versenden periodisch ihren Fingerprint per Broadcast/Multicast ins lokale Netz. Empfänger extrahieren die Absender-IP aus dem UDP-Paket und speichern die Zuordnung <code>Fingerprint → IP</code> lokal ab.</li>
+<li><strong>Handshake-Phase</strong>: Beim Verbindungsaufbau findet ein Public-Key-Austausch statt, gefolgt von beidseitiger Fingerprint-Verifikation. Nur wenn beide Seiten positive Verifikation bestätigen, wird die Verbindung aufgebaut.</li>
+</ol>
+<h2 id="begrundung">Begründung<a class="headerlink" href="#begrundung" title="Permanent link">&para;</a></h2>
+<p>Dieser dezentralisierte Ansatz ermöglicht:
+- <strong>Keine Nutzerkonten erforderlich</strong>: Geräte werden direkt über ihre Fingerprints identifiziert und verwaltet
+- <strong>Einfache Peer-Verwaltung</strong>: Vertrauenswürdige Geräte können über eine lokale Registrierung ohne zentrale Infrastruktur verwaltet werden
+- <strong>Dynamische IP-Verwaltung</strong>: Keine festen IP-Adressen erforderlich – Geräte werden durch Fingerprints identifiziert
+- <strong>Gegenseitige Authentifizierung</strong> durch Fingerprint-Verifikation basierend auf Public Keys
+- <strong>Sicherheit durch Trust-by-Verification</strong>: Verbindungen sind nur zu registrierten Peers möglich
+- <strong>Skalierbarkeit</strong> im lokalen Netz ohne Single-Point-of-Failure</p>
+<h3 id="betrachtete-alternativen">Betrachtete Alternativen<a class="headerlink" href="#betrachtete-alternativen" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
 <tr>
-<th>Modus</th>
-<th>Beschreibung</th>
+<th>Alternative</th>
+<th>Begründung für Ablehnung</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>mirror</code></td>
-<td>Beide Seiten werden auf denselben Stand gebracht. Änderungen auf einem Gerät werden auf das andere übertragen – in beide Richtungen.</td>
+<td>Nur Fingerprint-basierte Zuordnung ohne Public-Key-Austausch</td>
+<td>Unzureichende Sicherheit, keine Forward-Secrecy, anfällig für Man-in-the-Middle-Attacken</td>
 </tr>
 <tr>
-<td><code>backup-to-peer</code></td>
-<td>Nur das lokale Gerät überträgt Daten an den Peer. Der Peer lädt nichts zurück. Geeignet als einseitiges Backup.</td>
+<td>Einseitiges Vertrauensmodell</td>
+<td>Asymmetrisches Sicherheitsmodell, höheres Risiko bei Gerätekompromittierung</td>
 </tr>
 </tbody>
 </table>
-<hr />
-<h2 id="konfiguration-eines-ordners">Konfiguration eines Ordners<a class="headerlink" href="#konfiguration-eines-ordners" title="Permanent link">&para;</a></h2>
-<p>Ein Ordner-Eintrag besteht aus:</p>
-<table>
-<thead>
-<tr>
-<th>Feld</th>
-<th>Beschreibung</th>
-<th>Pflicht</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>id</code></td>
-<td>Eindeutiger Name für diesen Eintrag</td>
-<td>✅</td>
-</tr>
-<tr>
-<td><code>path</code></td>
-<td>Pfad zum Ordner auf dem lokalen Gerät</td>
-<td>✅</td>
-</tr>
-<tr>
-<td><code>mode</code></td>
-<td>Sync-Modus (<code>mirror</code> oder <code>backup-to-peer</code>)</td>
-<td>✅</td>
-</tr>
-</tbody>
-</table>
-<p><strong>Beispiel:</strong></p>
-<div class="highlight"><pre><span></span><code><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">dokumente</span>
-<span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/home/user/Dokumente</span>
-<span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mirror</span>
-</code></pre></div>
-<hr />
-<h2 id="konfiguration-einer-einzelnen-datei">Konfiguration einer einzelnen Datei<a class="headerlink" href="#konfiguration-einer-einzelnen-datei" title="Permanent link">&para;</a></h2>
-<p>Eine einzelne Datei wird genauso konfiguriert wie ein Ordner – nur dass der Pfad auf eine Datei zeigt:</p>
-<table>
-<thead>
-<tr>
-<th>Feld</th>
-<th>Beschreibung</th>
-<th>Pflicht</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>id</code></td>
-<td>Eindeutiger Name für diesen Eintrag</td>
-<td>✅</td>
-</tr>
-<tr>
-<td><code>path</code></td>
-<td>Pfad zur Datei auf dem lokalen Gerät</td>
-<td>✅</td>
-</tr>
-<tr>
-<td><code>mode</code></td>
-<td>Sync-Modus (<code>mirror</code> oder <code>backup-to-peer</code>)</td>
-<td>✅</td>
-</tr>
-</tbody>
-</table>
-<p><strong>Beispiel:</strong></p>
-<div class="highlight"><pre><span></span><code><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">notizen</span>
-<span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/home/user/notizen.txt</span>
-<span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">backup-to-peer</span>
-</code></pre></div>
-<hr />
-<h2 id="gesamte-konfigurationsdatei">Gesamte Konfigurationsdatei<a class="headerlink" href="#gesamte-konfigurationsdatei" title="Permanent link">&para;</a></h2>
-<p>Alle Einträge werden gemeinsam in einer Konfigurationsdatei gespeichert:</p>
-<div class="highlight"><pre><span></span><code><span class="nt">entries</span><span class="p">:</span>
-<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">dokumente</span>
-<span class="w">    </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/home/user/Dokumente</span>
-<span class="w">    </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mirror</span>
+<h2 id="konsequenzen">Konsequenzen<a class="headerlink" href="#konsequenzen" title="Permanent link">&para;</a></h2>
+<h3 id="positiv">Positiv<a class="headerlink" href="#positiv" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Dezentralisierte Architektur ohne externe Abhängigkeiten</li>
+<li><strong>Keine festen IP-Adressen erforderlich</strong> – Geräte können sich frei im Netz bewegen</li>
+<li>Gegenseitige Authentifizierung erhöht Sicherheit</li>
+<li>Geringe Latenz durch direkten TCP-Verbindungsaufbau nach Entdeckung</li>
+<li>Einfache Trust-Verwaltung: nur vertrauenswürdige Fingerprints akzeptieren</li>
+</ul>
+<h3 id="negativ-trade-offs">Negativ / Trade-offs<a class="headerlink" href="#negativ-trade-offs" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Periodische Broadcasts können zu erhöhtem Netzwerk-Traffic führen</li>
+<li>Discovery-Tabelle muss in Speicher verwaltet werden (bei vielen Geräten)</li>
+<li>Abhängig von Broadcast/Multicast-Unterstützung im Netzwerk</li>
+<li>Port-Management erforderlich (Standardport festlegen oder im Broadcast übertragen)</li>
+<li>Vertrauenswürdige Fingerprints müssen vorab bereitgestellt werden</li>
+</ul>
+<h2 id="detaillierte-spezifikation">Detaillierte Spezifikation<a class="headerlink" href="#detaillierte-spezifikation" title="Permanent link">&para;</a></h2>
+<h3 id="broadcast">Broadcast<a class="headerlink" href="#broadcast" title="Permanent link">&para;</a></h3>
+<p><strong>Kurzfassung:</strong> Clients verschicken ihren Fingerprint im Intervall ins Netz. Empfänger lesen die Absender-IP aus der Nachricht und speichern jede eingehende Zuordnung <code>Fingerprint → IP</code> lokal ab.</p>
+<p>Jeder Client sendet in einem festen Intervall eine Broadcast-/Multicast-Nachricht mit seinem Fingerprint ins lokale Netz. Empfänger lesen die Absender-IP aus dem UDP-Paket und speichern die Zuordnung <code>Fingerprint → IP</code> in einer Discovery-Tabelle – unabhängig davon, ob der Fingerprint bereits als vertrauenswürdig bekannt ist. Die Trust-Prüfung findet erst beim Verbindungsaufbau statt.</p>
+<p><em>Hinweis: Port sollte entweder im Broadcast mitgesendet oder als Standardport festgelegt werden (erforderlich für Verbindungsaufbau).</em></p>
+<h3 id="verbindung-aufbauen-handshake">Verbindung aufbauen (Handshake)<a class="headerlink" href="#verbindung-aufbauen-handshake" title="Permanent link">&para;</a></h3>
+<p><strong>Kurzfassung:</strong>
+- Beim Verbindungsaufbau tauschen beide Partner ihre Public Keys aus.
+- Aus den empfangenen Public Keys wird jeweils der Fingerprint berechnet und mit den lokal hinterlegten Fingerprints vertrauenswürdiger Geräte abgeglichen.
+- Nur wenn die Fingerprints auf beiden Seiten einem vertrauenswürdigen Gerät entsprechen, wird die Verbindung aufgebaut.</p>
+<p><strong>Im Detail:</strong></p>
+<ol>
+<li>Peer A ermittelt die aktuelle IP von Peer B aus der Discovery-Tabelle (anhand des Fingerprints).</li>
+<li>Peer A baut eine TCP-Verbindung zu dieser IP auf.</li>
+<li>Beide Partner tauschen ihre Public Keys aus.</li>
+<li>Beidseitige Fingerprint-Verifikation: Jede Seite berechnet den Fingerprint des empfangenen Public Keys und vergleicht ihn mit dem lokal gespeicherten, vertrauenswürdigen Fingerprint der Gegenseite.</li>
+<li>Nur wenn <strong>beide</strong> Seiten ein positives Ergebnis haben, gilt die Gegenseite als authentifiziert und die Nutzdaten werden anschließend mit dem Public Key des Empfängers verschlüsselt.</li>
+</ol>
+<h3 id="ablaufdiagramm">Ablaufdiagramm<a class="headerlink" href="#ablaufdiagramm" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code>sequenceDiagram
+    autonumber
+    participant A as Peer A
+    participant Net as Lokales Netz
+    participant B as Peer B
 
-<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">notizen</span>
-<span class="w">    </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/home/user/notizen.txt</span>
-<span class="w">    </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">backup-to-peer</span>
+    Note over A,B: Phase 1 – Broadcast (periodisch)
+
+    A-&gt;&gt;Net: Broadcast { Fingerprint_A }
+    Net-&gt;&gt;B: Broadcast empfangen (Absender-IP = IP_A)
+    B-&gt;&gt;B: speichere Fingerprint_A → IP_A
+
+    B-&gt;&gt;Net: Broadcast { Fingerprint_B }
+    Net-&gt;&gt;A: Broadcast empfangen (Absender-IP = IP_B)
+    A-&gt;&gt;A: speichere Fingerprint_B → IP_B
+
+    Note over A,B: Phase 2 – Verbindungsaufbau &amp; Handshake
+
+    A-&gt;&gt;B: TCP-Connect zu IP_B
+    A-&gt;&gt;B: PublicKey_A
+    B-&gt;&gt;A: PublicKey_B
+
+    A-&gt;&gt;A: Hash(PublicKey_B) == Fingerprint_B ?
+    B-&gt;&gt;B: Hash(PublicKey_A) == Fingerprint_A ?
+
+    alt beide Fingerprints gültig
+        Note over A,B: Phase 3 – Kommunikation
+    else Verifikation fehlgeschlagen
+        A--xB: Verbindung abbrechen
+    end
 </code></pre></div>
-<hr />
-<h2 id="offene-punkte">Offene Punkte<a class="headerlink" href="#offene-punkte" title="Permanent link">&para;</a></h2>
-<ul>
-<li>Sollen bestimmte Dateien oder Dateitypen ausgeschlossen werden können (z. B. <code>.tmp</code>, <code>.log</code>)?</li>
-</ul>
-<hr />
-<h2 id="regeln">Regeln<a class="headerlink" href="#regeln" title="Permanent link">&para;</a></h2>
-<ul>
-<li>Jede <code>id</code> muss eindeutig sein – zwei Einträge dürfen nicht denselben Namen haben.</li>
-<li>Der angegebene <code>path</code> muss auf dem lokalen Gerät existieren.</li>
-<li>Der <code>mode</code> darf nur <code>mirror</code> oder <code>backup-to-peer</code> sein.</li>
-</ul>
 
 
 
