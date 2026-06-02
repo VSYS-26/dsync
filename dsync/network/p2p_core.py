@@ -5,6 +5,7 @@ from enum import IntEnum
 import hashlib
 import ssl
 import struct
+from typing import cast
 
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
@@ -12,12 +13,15 @@ from cryptography.hazmat.primitives import serialization
 # RSA-2048 SubjectPublicKeyInfo DER (294 B) + RSA-2048 PSS signature (256 B)
 _AUTH_PAYLOAD_SIZE = 550
 
+# Upper bound for a CONFIG frame payload (64 KiB is generous for YAML config data)
+MAX_CONFIG_SIZE = 64 * 1024
+
 
 class MsgType(IntEnum):
     """Frame type identifier carried in the protocol header.
 
     Values are assigned across all protocol phases (auth, handshake,
-    file transfer) so the wire-type registry stays single-sourced.
+    config exchange, file transfer) so the wire-type registry stays single-sourced.
     Higher values are reserved for follow-up tickets (e.g. rsync-style
     SYNC_HASHES and REQUEST_CHUNKS).
     """
@@ -26,6 +30,9 @@ class MsgType(IntEnum):
     HELLO = 1
     FILE_META = 2
     FILE_CHUNK = 3
+    CONFIG = 4
+    CONFIG_ACK = 5
+    FILE_VERIFY = 6
 
 
 async def async_send_msg(writer: asyncio.StreamWriter, msg_type: int, data: bytes) -> None:
@@ -47,8 +54,8 @@ async def async_recv_msg(reader: asyncio.StreamReader) -> tuple[int | None, byte
 
     try:
         data = await reader.readexactly(length)
-    except asyncio.IncompleteReadError:
-        raise RuntimeError("Connection lost during reception.")
+    except asyncio.IncompleteReadError as err:  # check: B904 - raise from err
+        raise RuntimeError("Connection lost during reception.") from err
 
     return msg_type, data
 
@@ -61,8 +68,8 @@ async def async_recv_auth_msg(reader: asyncio.StreamReader) -> bytes:
     """
     try:
         header = await reader.readexactly(5)
-    except asyncio.IncompleteReadError:
-        raise RuntimeError("Connection closed before auth message received.")
+    except asyncio.IncompleteReadError as err:  # check: B904 - raise from err
+        raise RuntimeError("Connection closed before auth message received.") from err
 
     msg_type, length = struct.unpack("!BI", header)
 
@@ -76,8 +83,8 @@ async def async_recv_auth_msg(reader: asyncio.StreamReader) -> bytes:
 
     try:
         return await reader.readexactly(_AUTH_PAYLOAD_SIZE)
-    except asyncio.IncompleteReadError:
-        raise RuntimeError("Connection lost during auth message reception.")
+    except asyncio.IncompleteReadError as err:  # check: B904 - raise from err
+        raise RuntimeError("Connection lost during auth message reception.") from err
 
 
 def get_public_key_fingerprint(cert_der: bytes) -> str:
@@ -122,7 +129,9 @@ def get_tls_channel_binding(writer: asyncio.StreamWriter) -> bytes:
     if ssl_object is None:
         raise RuntimeError("No SSL object on writer — connection is not TLS")
     if hasattr(ssl_object, "export_keying_material"):
-        return ssl_object.export_keying_material("dsync-peer-auth-v1", 32, context=None)
+        return cast(
+            bytes, ssl_object.export_keying_material("dsync-peer-auth-v1", 32, context=None)
+        )
     binding = ssl_object.get_channel_binding("tls-unique")
     if binding is None:
         raise RuntimeError(
@@ -130,6 +139,78 @@ def get_tls_channel_binding(writer: asyncio.StreamWriter) -> bytes:
             "or TLS 1.2 must be negotiated (see create_tls_context)"
         )
     return hashlib.sha256(binding).digest()
+
+
+async def async_send_config(writer: asyncio.StreamWriter, config_data: bytes) -> None:
+    """Send config data (e.g., FoldersConfig as YAML).
+
+    Args:
+        writer: Authenticated stream writer.
+        config_data: Serialized config (e.g., YAML bytes).
+    """
+    await async_send_msg(writer, MsgType.CONFIG, config_data)
+
+
+async def async_recv_config(reader: asyncio.StreamReader) -> bytes:
+    """Receive config data (e.g., FoldersConfig as YAML).
+
+    Reads the frame header first and rejects payloads that exceed
+    ``MAX_CONFIG_SIZE`` before allocating or reading the full body.
+
+    Args:
+        reader: Authenticated stream reader.
+
+    Returns:
+        Config data as bytes (e.g., YAML).
+
+    Raises:
+        RuntimeError: If message type is not CONFIG, or if the declared
+            payload length exceeds ``MAX_CONFIG_SIZE``.
+    """
+    try:
+        header = await reader.readexactly(5)
+    except asyncio.IncompleteReadError as err:
+        raise RuntimeError("Connection closed before config received") from err
+
+    msg_type, length = struct.unpack("!BI", header)
+
+    if msg_type != MsgType.CONFIG:
+        raise RuntimeError(f"Expected CONFIG (type {MsgType.CONFIG}), got type {msg_type}")
+
+    if length > MAX_CONFIG_SIZE:
+        raise RuntimeError(
+            f"Config payload too large: {length} B exceeds limit of {MAX_CONFIG_SIZE} B"
+        )
+
+    try:
+        return await reader.readexactly(length)
+    except asyncio.IncompleteReadError as err:
+        raise RuntimeError("Connection lost during config reception") from err
+
+
+async def async_send_config_ack(writer: asyncio.StreamWriter) -> None:
+    """Send config acknowledgement.
+
+    Args:
+        writer: Authenticated stream writer.
+    """
+    await async_send_msg(writer, MsgType.CONFIG_ACK, b"")
+
+
+async def async_recv_config_ack(reader: asyncio.StreamReader) -> None:
+    """Receive config acknowledgement.
+
+    Args:
+        reader: Authenticated stream reader.
+
+    Raises:
+        RuntimeError: If message type is not CONFIG_ACK.
+    """
+    msg_type, _ = await async_recv_msg(reader)  # check: RUF059 - unused data
+    if msg_type is None:
+        raise RuntimeError("Connection closed before config ack received")
+    if msg_type != MsgType.CONFIG_ACK:
+        raise RuntimeError(f"Expected CONFIG_ACK (type {MsgType.CONFIG_ACK}), got type {msg_type}")
 
 
 def create_tls_context(is_server: bool, cert_path: str, key_path: str) -> ssl.SSLContext:

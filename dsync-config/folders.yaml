@@ -1,15 +1,29 @@
 # Folder sync configuration.
 # The entries below are EXAMPLES only - uncomment and edit them to configure
 # real folders or single files for synchronization. Each entry needs a unique
-# id, a path and a sync mode (mirror | backup-to-peer).
+# id, a path and a sync mode (mirror | backup-to-peer | backup-from-peer).
 
 # entries:
 #   # Example: sync a whole folder bidirectionally.
-#   - id: dokumente
-#     path: /home/user/Dokumente
+#   - id: documents
+#     path: /home/user/documents
 #     mode: mirror
-#
-#   # Example: one-way backup of a single file.
-#   - id: notizen
-#     path: /home/user/notizen.txt
+#     devices:
+#       - laptop-anna
+#       - server-basement
+
+#   # Example: one-way backup of a folder to other peers. (Sends backup)
+#   - id: notes
+#     path: /home/user/notes
 #     mode: backup-to-peer
+#     devices:
+#       - laptop-anna
+#       - server-basement
+#
+#   # Example: one-way backup of a folder from other peers. (Receives backup)
+#   - id: pictures
+#     path: /home/user/pictures
+#     mode: backup-from-peer
+#     # When devices is missing, then all trusted devices are used.
+#     # Set recursive to false to only sync files in the root of this folder, ignoring subfolders.
+#     recursive: false

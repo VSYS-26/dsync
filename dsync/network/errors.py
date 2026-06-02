@@ -19,3 +19,8 @@ class TransferIntegrityError(TransferError):
 
 class PeerAuthError(Exception):
     """Raised when mutual TLS peer authentication fails."""
+
+
+class ConfigConflictError(Exception):
+    """Raised when circular sync configuration is detected between peers."""
+    pass
