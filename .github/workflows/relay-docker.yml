@@ -2,8 +2,8 @@ name: Relay Server — Build & Push Docker Image
 
 on:
   push:
-    branches:
-      - dev
+#    branches:
+#      - dev
     paths:
       - "dsync/network/relay_server.py"
       - "dsync/network/relay_protocol.py"
