@@ -51,10 +51,7 @@ def sync(
     try:
         client = LocalControlClient.discover()
     except FileNotFoundError as exc:
-        error(
-            f"{exc}\n"
-            "Run `dsync relay connect <relay-id>` in another terminal first."
-        )
+        error(f"{exc}\nRun `dsync relay connect <relay-id>` in another terminal first.")
         raise typer.Exit(code=1) from exc
 
     if folder_id is None:

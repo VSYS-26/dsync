@@ -31,3 +31,7 @@ class RelayAuthError(RelayError):
 
 class RelayProtocolError(RelayError):
     """Raised when a control-channel frame is malformed or unexpected."""
+
+
+class ConfigConflictError(Exception):
+    """Raised when circular sync configuration is detected between peers."""

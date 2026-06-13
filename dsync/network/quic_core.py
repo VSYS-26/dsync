@@ -59,6 +59,7 @@ class MsgType(IntEnum):
     FILE_CHUNK = 3
     CONFIG = 4
     CONFIG_ACK = 5
+    FILE_VERIFY = 11
 
     # Peer-to-relay control channel
     REGISTER_ACK = 6
@@ -111,9 +112,7 @@ async def async_recv_auth_msg(reader: asyncio.StreamReader) -> bytes:
 
     msg_type, length = struct.unpack("!BI", header)
     if msg_type != MsgType.AUTH:
-        raise RuntimeError(
-            f"Expected auth message (type {MsgType.AUTH}), got type {msg_type}"
-        )
+        raise RuntimeError(f"Expected auth message (type {MsgType.AUTH}), got type {msg_type}")
     if length != _AUTH_PAYLOAD_SIZE:
         raise RuntimeError(
             f"Auth message wrong size: got {length} B, expected {_AUTH_PAYLOAD_SIZE} B"
@@ -163,9 +162,7 @@ async def async_recv_config_ack(reader: asyncio.StreamReader) -> None:
     if msg_type is None:
         raise RuntimeError("Connection closed before config ack received")
     if msg_type != MsgType.CONFIG_ACK:
-        raise RuntimeError(
-            f"Expected CONFIG_ACK (type {MsgType.CONFIG_ACK}), got type {msg_type}"
-        )
+        raise RuntimeError(f"Expected CONFIG_ACK (type {MsgType.CONFIG_ACK}), got type {msg_type}")
 
 
 def build_quic_configuration(
@@ -224,9 +221,7 @@ def get_quic_channel_binding(connection: QuicConnection) -> bytes:
     tls = getattr(connection, "tls", None)
     key_schedule = getattr(tls, "key_schedule", None) if tls is not None else None
     if key_schedule is None:
-        raise RuntimeError(
-            "QUIC handshake has not completed yet; channel binding is unavailable"
-        )
+        raise RuntimeError("QUIC handshake has not completed yet; channel binding is unavailable")
     binding = hkdf_expand_label(
         algorithm=key_schedule.algorithm,
         secret=key_schedule.secret,

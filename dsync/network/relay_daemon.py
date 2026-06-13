@@ -71,7 +71,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 #: Seconds between app-layer ``CONTROL_PING`` exchanges with the relay.
-#: Consumer NATs commonly drop idle UDP mappings after 30–60 s; this stays
+#: Consumer NATs commonly drop idle UDP mappings after 30-60 s; this stays
 #: well below that. QUIC's own PING fires only on transport need so we
 #: cannot rely on it alone.
 KEEPALIVE_INTERVAL: Final[float] = 15.0
@@ -174,7 +174,7 @@ class RelayDaemon:
         exception propagates so the CLI can surface a clear error. Once the
         first attempt succeeds, the maintenance and keepalive loops take over.
         """
-        self._endpoint = await MultiQuicEndpoint.bind(host="0.0.0.0", port=0)
+        self._endpoint = await MultiQuicEndpoint.bind(host="0.0.0.0", port=0)  # nosec B104
         self._endpoint.enable_server(
             build_quic_configuration(
                 is_client=False,
@@ -192,9 +192,7 @@ class RelayDaemon:
         self._spawn(self._keepalive_loop())
 
         # IPC server.
-        socket_path = self._ipc_socket_path or (
-            default_ipc_dir() / f"relay-{os.getpid()}.sock"
-        )
+        socket_path = self._ipc_socket_path or (default_ipc_dir() / f"relay-{os.getpid()}.sock")
         self._ipc_server = LocalControlServer(
             socket_path=socket_path,
             handler=self._handle_ipc_request,
@@ -267,13 +265,13 @@ class RelayDaemon:
         from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
         spki = cert.public_key().public_bytes(
-            Encoding.DER, PublicFormat.SubjectPublicKeyInfo,
+            Encoding.DER,
+            PublicFormat.SubjectPublicKeyInfo,
         )
         actual = fingerprint_from_spki(spki)
         if actual != self._relay.fingerprint:
             raise RelayAuthError(
-                f"relay fingerprint mismatch: expected {self._relay.fingerprint}, "
-                f"got {actual}"
+                f"relay fingerprint mismatch: expected {self._relay.fingerprint}, got {actual}"
             )
 
     async def _authenticate_to_relay(self) -> None:
@@ -288,9 +286,7 @@ class RelayDaemon:
         if msg_type == MsgType.ERROR:
             raise RelayAuthError(f"relay rejected AUTH: {parse_error(body).reason}")
         if msg_type != MsgType.REGISTER_ACK:
-            raise RelayProtocolError(
-                f"expected REGISTER_ACK, got msg type {msg_type}"
-            )
+            raise RelayProtocolError(f"expected REGISTER_ACK, got msg type {msg_type}")
         ack = parse_register_ack(body)
         logger.info(
             "registered to relay; observed endpoint %s:%d",
@@ -575,9 +571,7 @@ class RelayDaemon:
             raise RelayProtocolError(f"unexpected response type {msg_type}")
         punch = parse_punch_info(body)
         if punch.role != "dialer":
-            raise RelayProtocolError(
-                f"relay assigned us role={punch.role}, expected dialer"
-            )
+            raise RelayProtocolError(f"relay assigned us role={punch.role}, expected dialer")
         if punch.peer_fingerprint != peer_device.fingerprint:
             raise RelayProtocolError(
                 f"PUNCH_INFO fingerprint mismatch: expected {peer_device.fingerprint}, "
@@ -642,7 +636,6 @@ class RelayDaemon:
                     peer_protocol.wait_connected(),
                     timeout=PEER_DIAL_HANDSHAKE_TIMEOUT,
                 )
-                return peer_protocol
             except (TimeoutError, ConnectionError, OSError) as exc:
                 last_error = exc
                 logger.warning(
@@ -656,10 +649,11 @@ class RelayDaemon:
                 self._endpoint.remove_connection(peer_addr)
                 if attempt < PEER_DIAL_MAX_ATTEMPTS:
                     await asyncio.sleep(PEER_DIAL_RETRY_DELAY)
+            else:
+                return peer_protocol
 
         raise HolePunchError(
-            f"peer dial to {peer_addr} failed after "
-            f"{PEER_DIAL_MAX_ATTEMPTS} attempts: {last_error}"
+            f"peer dial to {peer_addr} failed after {PEER_DIAL_MAX_ATTEMPTS} attempts: {last_error}"
         )
 
     # ---- helpers ------------------------------------------------------------
@@ -671,7 +665,7 @@ class RelayDaemon:
         return None
 
     def _spawn(self, coro: object) -> None:
-        task = asyncio.create_task(coro)  # type: ignore[arg-type]
+        task: asyncio.Task[object] = asyncio.create_task(coro)  # type: ignore[arg-type]
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
 
@@ -688,9 +682,7 @@ async def _wait_for_first_stream(
     sync session).
     """
     loop = asyncio.get_running_loop()
-    future: asyncio.Future[tuple[asyncio.StreamReader, asyncio.StreamWriter]] = (
-        loop.create_future()
-    )
+    future: asyncio.Future[tuple[asyncio.StreamReader, asyncio.StreamWriter]] = loop.create_future()
 
     def capture(
         reader: asyncio.StreamReader,

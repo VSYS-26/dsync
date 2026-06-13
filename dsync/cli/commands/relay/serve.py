@@ -17,7 +17,7 @@ def serve(
     host: Annotated[
         str,
         typer.Option(help="UDP bind address (use 0.0.0.0 to accept from anywhere)"),
-    ] = "0.0.0.0",
+    ] = "0.0.0.0",  # nosec B104
     port: Annotated[
         int,
         typer.Option(help="UDP port to listen on"),

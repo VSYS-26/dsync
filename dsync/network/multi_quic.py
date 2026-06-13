@@ -63,10 +63,9 @@ class MultiQuicEndpoint(asyncio.DatagramProtocol):
     """
 
     def __init__(self) -> None:
+        """Initialize an unbound endpoint with empty protocol and config state."""
         self._transport: asyncio.DatagramTransport | None = None
-        self._protocols_by_addr: dict[
-            tuple[str, int], QuicConnectionProtocol
-        ] = {}
+        self._protocols_by_addr: dict[tuple[str, int], QuicConnectionProtocol] = {}
         self._server_config: QuicConfiguration | None = None
         self._server_stream_handler: Any | None = None
         self._server_factory: Any | None = None
@@ -113,14 +112,15 @@ class MultiQuicEndpoint(asyncio.DatagramProtocol):
 
     @classmethod
     async def bind(
-        cls, *, host: str = "0.0.0.0", port: int = 0
+        cls,
+        *,
+        host: str = "0.0.0.0",  # nosec B104
+        port: int = 0,
     ) -> MultiQuicEndpoint:
         """Bind a fresh UDP socket on ``host:port`` and return an endpoint."""
         endpoint = cls()
         loop = asyncio.get_running_loop()
-        await loop.create_datagram_endpoint(
-            lambda: endpoint, local_addr=(host, port)
-        )
+        await loop.create_datagram_endpoint(lambda: endpoint, local_addr=(host, port))
         return endpoint
 
     @property
@@ -152,9 +152,7 @@ class MultiQuicEndpoint(asyncio.DatagramProtocol):
         self._server_config = configuration
         self._server_stream_handler = stream_handler
 
-    async def accept_next(
-        self, timeout: float | None = None
-    ) -> QuicConnectionProtocol:
+    async def accept_next(self, timeout: float | None = None) -> QuicConnectionProtocol:
         """Block until the next server-side connection is accepted.
 
         Args:
@@ -244,9 +242,7 @@ class MultiQuicEndpoint(asyncio.DatagramProtocol):
 
     # ---- internals -----------------------------------------------------------
 
-    def _maybe_accept(
-        self, data: bytes, addr: tuple[str, int]
-    ) -> QuicConnectionProtocol | None:
+    def _maybe_accept(self, data: bytes, addr: tuple[str, int]) -> QuicConnectionProtocol | None:
         """Try to spawn a server-side QUIC connection for ``addr``.
 
         Only long-header INITIAL packets create new connections. Short-header

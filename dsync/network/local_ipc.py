@@ -1,5 +1,6 @@
-"""Local IPC between the long-running ``dsync relay connect`` daemon and
-the one-shot ``dsync sync run_backup`` invocation.
+"""Local IPC between the relay-connect daemon and the sync command.
+
+``dsync relay connect`` and the one-shot ``dsync sync run_backup`` invocation.
 
 When the user triggers a sync, ``run_backup`` cannot open its own QUIC
 connection to a peer — the relay-observed NAT mapping lives on the daemon's
@@ -24,6 +25,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable
+import contextlib
 import json
 import logging
 import os
@@ -45,11 +47,9 @@ _DEFAULT_BASE_RELATIVE = "dsync"
 def default_ipc_dir() -> Path:
     """Return the directory where IPC sockets live."""
     base = os.environ.get("XDG_RUNTIME_DIR")
-    if base:
-        directory = Path(base) / _DEFAULT_BASE_RELATIVE
-    else:
-        directory = Path(f"/tmp/dsync-{os.getuid()}")
-    return directory
+    return (
+        Path(base) / _DEFAULT_BASE_RELATIVE if base else Path(f"/tmp/dsync-{os.getuid()}")  # nosec B108
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -156,12 +156,12 @@ class LocalControlServer:
             path=str(self._socket_path),
         )
         # 0600 — owner-only read/write.
-        os.chmod(self._socket_path, 0o600)
+        self._socket_path.chmod(0o600)
 
         # Publish the socket path so `run_backup` can find us.
         self._pointer_path = self._socket_path.parent / "relay.current"
         self._pointer_path.write_text(str(self._socket_path), encoding="utf-8")
-        os.chmod(self._pointer_path, 0o600)
+        self._pointer_path.chmod(0o600)
 
         logger.info("LocalControlServer bound on %s", self._socket_path)
 
@@ -192,9 +192,7 @@ class LocalControlServer:
             except (asyncio.IncompleteReadError, ValueError) as exc:
                 await _write_frame(
                     writer,
-                    IpcResponse(status="error", reason=str(exc))
-                    .model_dump_json()
-                    .encode("utf-8"),
+                    IpcResponse(status="error", reason=str(exc)).model_dump_json().encode("utf-8"),
                 )
                 return
 
@@ -221,10 +219,8 @@ class LocalControlServer:
             )
         finally:
             writer.close()
-            try:
+            with contextlib.suppress(Exception):
                 await writer.wait_closed()
-            except Exception:
-                pass
 
 
 # ---------------------------------------------------------------------------
@@ -254,9 +250,7 @@ class LocalControlClient:
             )
         path = Path(pointer.read_text(encoding="utf-8").strip())
         if not path.exists():
-            raise FileNotFoundError(
-                f"stale relay.current pointer: {path} does not exist"
-            )
+            raise FileNotFoundError(f"stale relay.current pointer: {path} does not exist")
         return cls(socket_path=path)
 
     async def request(self, payload: BaseModel) -> IpcResponse:
@@ -268,7 +262,5 @@ class LocalControlClient:
             return IpcResponse.model_validate(json.loads(response_body.decode("utf-8")))
         finally:
             writer.close()
-            try:
+            with contextlib.suppress(Exception):
                 await writer.wait_closed()
-            except Exception:
-                pass

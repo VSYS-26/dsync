@@ -184,8 +184,9 @@ async def _one_attempt(
 
     # Listener path: bind the server first so it can answer the INITIAL
     # mid-burst, then send our own burst to open the local NAT mapping.
+    listener_endpoint: ListenerEndpoint
     try:
-        endpoint = await start_listener(
+        listener_endpoint = await start_listener(
             sock=attempt_sock,
             configuration=configuration,
         )
@@ -194,19 +195,19 @@ async def _one_attempt(
         raise
     try:
         await _send_punch_burst(attempt_sock, peer_addr, burst_count, burst_interval)
-        await endpoint.wait_accepted(timeout=handshake_timeout)
+        await listener_endpoint.wait_accepted(timeout=handshake_timeout)
     except TimeoutError:
-        endpoint.transport.close()
+        listener_endpoint.transport.close()
         raise
     try:
         await asyncio.wait_for(
-            endpoint.protocol.wait_connected(),
+            listener_endpoint.protocol.wait_connected(),
             timeout=handshake_timeout,
         )
     except TimeoutError:
-        endpoint.transport.close()
+        listener_endpoint.transport.close()
         raise
-    return endpoint
+    return listener_endpoint
 
 
 async def _send_punch_burst(

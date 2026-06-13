@@ -190,7 +190,7 @@ class PeerSession:
             assert self._folder is not None  # checked in __init__
             files = _enumerate_folder_files(self._folder)
             logger.info("source sending %d file(s) to %s", len(files), peer_id)
-            await backup.send_files(writer, files)
+            await backup.send_files(writer, reader, files, Path(self._folder.path))
             # Half-close so the receiver sees EOF and exits its loop. Then
             # block on the peer's EOF so the caller may safely close the
             # underlying QUIC connection — without this round-trip the
@@ -202,7 +202,7 @@ class PeerSession:
             peer_dir = self._recv_dir / peer_id
             peer_dir.mkdir(parents=True, exist_ok=True)
             logger.info("peer receiving files from %s into %s", peer_id, peer_dir)
-            await backup.receive_files(reader, peer_dir)
+            await backup.receive_files(reader, writer, peer_dir)
             # Signal back to the source that all chunks have been processed.
             writer.write_eof()
 
@@ -232,8 +232,7 @@ class PeerSession:
             raise PeerAuthError(f"Unknown peer fingerprint: {peer_fp}")
         if expected_peer_fingerprint is not None and peer_fp != expected_peer_fingerprint:
             raise PeerAuthError(
-                f"Peer fingerprint mismatch: expected {expected_peer_fingerprint}, "
-                f"got {peer_fp}"
+                f"Peer fingerprint mismatch: expected {expected_peer_fingerprint}, got {peer_fp}"
             )
 
         try:

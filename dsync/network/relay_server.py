@@ -61,7 +61,7 @@ class _PeerRegistration:
     protocol: QuicConnectionProtocol = field(repr=False)
 
 
-class _RelayProtocol(QuicConnectionProtocol):
+class _RelayProtocol(QuicConnectionProtocol):  # type: ignore[misc]
     """QuicConnectionProtocol subclass that knows how to clean up the registry.
 
     aioquic creates one instance per inbound QUIC connection. We register the
@@ -203,7 +203,7 @@ class RelayServer:
                 await reader.read()
                 await send_json(writer, MsgType.CONTROL_PING, None)
             else:
-                raise RelayProtocolError(
+                raise RelayProtocolError(  # noqa: TRY301
                     f"Unexpected initial message type on relay stream: {msg_type}"
                 )
         except (RelayProtocolError, RelayAuthError, ValueError) as exc:
@@ -229,9 +229,7 @@ class RelayServer:
         body = await reader.readexactly(AUTH_PAYLOAD_SIZE)
         trailing = await reader.read()
         if trailing:
-            raise RelayProtocolError(
-                f"AUTH stream had {len(trailing)} unexpected trailing bytes"
-            )
+            raise RelayProtocolError(f"AUTH stream had {len(trailing)} unexpected trailing bytes")
 
         spki, sig = unpack_auth_payload(body)
         binding = get_quic_channel_binding(protocol._quic)
