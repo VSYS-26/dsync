@@ -4,15 +4,15 @@ on:
   push:
 #    branches:
 #      - dev
-    paths:
-      - "dsync/network/relay_server.py"
-      - "dsync/network/relay_protocol.py"
-      - "dsync/network/relay_client.py"
-      - "dsync/network/relay_daemon.py"
-      - "dsync/cli/commands/relay/**"
-      - "dsync/**/*.py"
-      - "pyproject.toml"
-      - "Dockerfile.relay"
+#    paths:
+#      - "dsync/network/relay_server.py"
+#      - "dsync/network/relay_protocol.py"
+#      - "dsync/network/relay_client.py"
+#      - "dsync/network/relay_daemon.py"
+#      - "dsync/cli/commands/relay/**"
+#      - "dsync/**/*.py"
+#      - "pyproject.toml"
+#      - "Dockerfile.relay"
   workflow_dispatch:
 
 env:

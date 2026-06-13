@@ -4,7 +4,7 @@ on:
   workflow_run:
     workflows: ["Relay Server — Build & Push Docker Image"]
     types: [completed]
-    branches: [main, dev]
+#    branches: [main, dev]
   workflow_dispatch:
     inputs:
       image_tag:
