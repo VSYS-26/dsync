@@ -1,8 +1,8 @@
-name: Deploy Relay Server — Test Environment
+name: Deploy Relay Server - Test Environment
 
 on:
   workflow_run:
-    workflows: ["Relay Server — Build & Push Docker Image"]
+    workflows: ["Relay Server - Build & Push Docker Image"]
     types: [completed]
 #    branches: [main, dev]
   workflow_dispatch:
