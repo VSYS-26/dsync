@@ -1,0 +1,56 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            slug: dsync-linux-x64
+            ext: tar.gz
+          - os: macos-latest
+            slug: dsync-macos-arm64
+            ext: tar.gz
+          - os: windows-latest
+            slug: dsync-windows-x64
+            ext: zip
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute build metadata
+        id: meta
+        shell: bash
+        run: |
+          short_sha=$(git rev-parse --short=7 HEAD)
+          echo "asset=${{ matrix.slug }}-${short_sha}.${{ matrix.ext }}" >> "$GITHUB_OUTPUT"
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Build onedir bundle
+        run: uv run pyinstaller packaging/dsync.spec
+
+      - name: Archive bundle (unix)
+        if: runner.os != 'Windows'
+        run: tar -czf "${{ steps.meta.outputs.asset }}" -C dist dsync
+
+      - name: Archive bundle (windows)
+        if: runner.os == 'Windows'
+        run: Compress-Archive -Path dist/dsync -DestinationPath "${{ steps.meta.outputs.asset }}"
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.meta.outputs.asset }}
