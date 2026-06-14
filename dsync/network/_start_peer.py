@@ -18,7 +18,7 @@ Prerequisites:
 import asyncio
 from pathlib import Path
 
-from dsync.config import DevicesConfig, FoldersConfig, TrustedDevice
+from dsync.config import DaemonConfig, DevicesConfig, FoldersConfig, TrustedDevice
 from dsync.network.node import P2PNode
 from dsync.state import AppState
 
@@ -37,7 +37,9 @@ def _build_demo_state() -> AppState:
             TrustedDevice(id="Peer B (Laptop)", fingerprint=PEER_B_FINGERPRINT),
         ]
     )
-    return AppState(config_dir=Path(), folders=FoldersConfig(), devices=devices)
+    return AppState(
+        config_dir=Path(), folders=FoldersConfig(), devices=devices, daemon=DaemonConfig()
+    )
 
 
 async def start_server_peer() -> None:

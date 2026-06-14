@@ -6,7 +6,7 @@ from typing import Annotated
 import typer
 
 from dsync.cli.console import error, info, warn
-from dsync.config import DevicesConfig, FoldersConfig
+from dsync.config import DaemonConfig, DevicesConfig, FoldersConfig
 from dsync.state import AppState
 
 DEFAULT_CONFIG_DIR = Path("./dsync-config")
@@ -35,6 +35,7 @@ def config_dir(
 
     folders = FoldersConfig.load(directory)
     devices = DevicesConfig.load(directory)
+    daemon = DaemonConfig.load(directory)
 
     # If devices field is omitted, use all trusted devices
     resolved_entries = []
@@ -59,4 +60,4 @@ def config_dir(
         f"{len(folders.entries)} folders, {len(devices.trusted_devices)} devices"
     )
 
-    ctx.obj = AppState(config_dir=directory, folders=folders, devices=devices)
+    ctx.obj = AppState(config_dir=directory, folders=folders, devices=devices, daemon=daemon)
