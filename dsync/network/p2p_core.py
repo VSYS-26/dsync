@@ -16,6 +16,9 @@ _AUTH_PAYLOAD_SIZE = 550
 # Upper bound for a CONFIG frame payload (64 KiB is generous for YAML config data)
 MAX_CONFIG_SIZE = 64 * 1024
 
+# Upper bound for an ERROR frame payload (4 KiB is plenty for code + message)
+MAX_ERROR_SIZE = 4 * 1024
+
 
 class MsgType(IntEnum):
     """Frame type identifier carried in the protocol header.
@@ -33,6 +36,7 @@ class MsgType(IntEnum):
     CONFIG = 4
     CONFIG_ACK = 5
     FILE_VERIFY = 6
+    ERROR = 7
 
 
 async def async_send_msg(writer: asyncio.StreamWriter, msg_type: int, data: bytes) -> None:
@@ -167,12 +171,23 @@ async def async_recv_config(reader: asyncio.StreamReader) -> bytes:
         RuntimeError: If message type is not CONFIG, or if the declared
             payload length exceeds ``MAX_CONFIG_SIZE``.
     """
+    from dsync.network.sync_errors import PeerReportedError, SyncError
+
     try:
         header = await reader.readexactly(5)
     except asyncio.IncompleteReadError as err:
         raise RuntimeError("Connection closed before config received") from err
 
     msg_type, length = struct.unpack("!BI", header)
+
+    if msg_type == MsgType.ERROR:
+        if length > MAX_ERROR_SIZE:
+            raise RuntimeError(f"ERROR payload too large: {length} B")
+        try:
+            payload = await reader.readexactly(length)
+        except asyncio.IncompleteReadError as err:
+            raise RuntimeError("Connection lost while reading ERROR frame") from err
+        raise PeerReportedError(SyncError.from_yaml(payload))
 
     if msg_type != MsgType.CONFIG:
         raise RuntimeError(f"Expected CONFIG (type {MsgType.CONFIG}), got type {msg_type}")
@@ -205,12 +220,34 @@ async def async_recv_config_ack(reader: asyncio.StreamReader) -> None:
 
     Raises:
         RuntimeError: If message type is not CONFIG_ACK.
+        PeerReportedError: If the peer sent an ERROR frame instead of an ack.
     """
-    msg_type, _ = await async_recv_msg(reader)  # check: RUF059 - unused data
+    # Local imports to avoid a sync_errors <-> p2p_core import cycle.
+    from dsync.network.sync_errors import PeerReportedError, SyncError
+
+    msg_type, payload = await async_recv_msg(reader)
     if msg_type is None:
         raise RuntimeError("Connection closed before config ack received")
+    if msg_type == MsgType.ERROR:
+        raise PeerReportedError(SyncError.from_yaml(payload or b""))
     if msg_type != MsgType.CONFIG_ACK:
         raise RuntimeError(f"Expected CONFIG_ACK (type {MsgType.CONFIG_ACK}), got type {msg_type}")
+
+
+async def async_send_error(writer: asyncio.StreamWriter, payload: bytes) -> None:
+    """Send a serialized :class:`~dsync.network.sync_errors.SyncError` to the peer.
+
+    Best-effort: drain failures are swallowed because we are usually already
+    aborting on an exception path and the peer is the only one we are still
+    trying to inform.
+    """
+    if len(payload) > MAX_ERROR_SIZE:
+        payload = payload[:MAX_ERROR_SIZE]
+    try:
+        await async_send_msg(writer, MsgType.ERROR, payload)
+    except (ConnectionError, OSError):
+        # Peer already gone — nothing we can do, don't mask the original error.
+        return
 
 
 def create_tls_context(is_server: bool, cert_path: str, key_path: str) -> ssl.SSLContext:

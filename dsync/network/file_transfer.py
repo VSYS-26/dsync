@@ -18,6 +18,12 @@ from dsync.network.errors import (
     TransferIntegrityError,
 )
 from dsync.network.p2p_core import MsgType, async_recv_msg, async_send_msg
+from dsync.network.sync_errors import (
+    ErrorCode,
+    PeerReportedError,
+    SyncError,
+    notify_peer,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +103,10 @@ async def _recv_frame(reader: asyncio.StreamReader) -> tuple[MsgType, bytes]:
         msg = "Unknown frame type"
         raise FrameValidationError(msg) from exc
 
+    if msg_type == MsgType.ERROR:
+        # Peer is aborting the transfer and told us why — surface verbatim.
+        raise PeerReportedError(SyncError.from_yaml(payload))
+
     if msg_type == MsgType.FILE_META:
         max_len = MAX_META_SIZE
     elif msg_type == MsgType.FILE_CHUNK:
@@ -148,6 +158,8 @@ async def send_file(
     if msg_type is None or peer_hash_bytes is None:
         msg = "Connection closed before receiving peer hash verification"
         raise TransferIntegrityError(msg)
+    if msg_type == MsgType.ERROR:
+        raise PeerReportedError(SyncError.from_yaml(peer_hash_bytes))
     if msg_type != MsgType.FILE_VERIFY:
         msg = f"Expected FILE_VERIFY (type {MsgType.FILE_VERIFY}), got type {msg_type}"
         raise TransferIntegrityError(msg)
@@ -230,12 +242,47 @@ async def recv_file(
         raise TransferIntegrityError(msg)
     meta = FileMeta.from_yaml(data)
 
-    target = _safe_resolve_under(dest_root, meta.path)
+    try:
+        target = _safe_resolve_under(dest_root, meta.path)
+    except TransferIntegrityError as exc:
+        await notify_peer(
+            writer,
+            SyncError(code=ErrorCode.PATH_TRAVERSAL, message=f"{exc} (path={meta.path!r})"),
+        )
+        raise
+
     target.parent.mkdir(parents=True, exist_ok=True)
     try:
         computed_hash = await _recv_and_verify_chunks(reader, target, meta)
-
         await async_send_msg(writer, MsgType.FILE_VERIFY, computed_hash.encode("utf-8"))
+    except PeerReportedError:
+        target.unlink(missing_ok=True)
+        raise
+    except TransferIntegrityError as exc:
+        target.unlink(missing_ok=True)
+        await notify_peer(
+            writer,
+            SyncError(code=ErrorCode.HASH_MISMATCH, message=str(exc)),
+        )
+        raise
+    except ChunkValidationError as exc:
+        target.unlink(missing_ok=True)
+        code = ErrorCode.EMPTY_CHUNK if "empty" in str(exc).lower() else ErrorCode.CHUNK_OVERRUN
+        await notify_peer(writer, SyncError(code=code, message=str(exc)))
+        raise
+    except PermissionError as exc:
+        target.unlink(missing_ok=True)
+        await notify_peer(
+            writer,
+            SyncError(code=ErrorCode.PERMISSION_DENIED, message=f"receiver cannot write: {exc}"),
+        )
+        raise
+    except OSError as exc:
+        target.unlink(missing_ok=True)
+        # ENOSPC=28; fall back to generic IO for everything else.
+        code = ErrorCode.DISK_FULL if getattr(exc, "errno", None) == 28 else ErrorCode.PERMISSION_DENIED
+        await notify_peer(writer, SyncError(code=code, message=str(exc)))
+        raise
     except BaseException:
         target.unlink(missing_ok=True)
         raise
@@ -251,6 +298,13 @@ async def send_path_as_zip(
     """Pack entry.path (file or folder) into a temp zip and send it."""
     src = Path(entry.path)
     if not src.exists():
+        await notify_peer(
+            writer,
+            SyncError(
+                code=ErrorCode.SOURCE_MISSING,
+                message=f"Source path does not exist on sender: {src}",
+            ),
+        )
         raise FileNotFoundError(f"Source not found: {src}")
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -288,6 +342,13 @@ async def recv_folder_and_extract(
         zip_path = await recv_file(reader, writer, tmpdir_path)
 
         if not zipfile.is_zipfile(zip_path):
+            await notify_peer(
+                writer,
+                SyncError(
+                    code=ErrorCode.BAD_ZIP,
+                    message="Received file is not a valid zip archive",
+                ),
+            )
             raise TransferIntegrityError("Received file is not a valid zip archive")
 
         def _extract() -> None:
