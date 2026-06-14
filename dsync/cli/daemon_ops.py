@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from dsync.daemon.base import Daemon
+    from dsync.state import AppState
 
 
 def run_enable(daemon: Daemon, label: str, save_config: Callable[[], None]) -> None:
@@ -83,6 +84,33 @@ def run_disable(daemon: Daemon, label: str, save_config: Callable[[], None]) -> 
     except Exception as e:
         error(f"Failed to disable {label} daemon: {e}")
         raise typer.Exit(code=1) from None
+
+
+def refresh_server_daemon(state: AppState) -> None:
+    """Restart the server daemon so it picks up changed folder/device config.
+
+    Strictly conditional: restarts only if the server daemon was enabled
+    beforehand and is currently running. Otherwise a no-op (no restart).
+
+    Args:
+        state: The current application state (holds the daemon config).
+    """
+    if not state.daemon.enabled:
+        return
+
+    from dsync.cli.console import info
+    from dsync.daemon.daemons import ServerDaemon
+
+    daemon = ServerDaemon(
+        state.config_dir,
+        port=state.daemon.port,
+        cert=state.daemon.cert,
+        key=state.daemon.key,
+    )
+    if not daemon.is_running():
+        return
+    daemon.restart()
+    info("Server daemon restarted to apply config change")
 
 
 def run_status(daemon: Daemon, label: str, extra_info: Callable[[], None] | None = None) -> None:
