@@ -24,6 +24,7 @@ from dsync.network.file_transfer import (
     recv_folder_and_extract,
     send_path_as_zip,
 )
+from dsync.network.index_exchange import FolderIndex, IndexExchange
 from dsync.state import AppState
 
 from .p2p_core import (
@@ -244,7 +245,13 @@ class P2PNode:
         writer: asyncio.StreamWriter,
         peer_id: str,
     ) -> None:
-        """Transfer the configured folder as a compressed zip."""
+        """Exchange config and folder indexes, then transfer the folder as a zip.
+        
+        Three phases run sequentially, each completing fully before the next starts:
+          1. Config exchange and validation: Both sides send their folder config.
+          2. Index exchange: Both sides build and exchange a snapshot of the folder's contents.
+          3. Payload transfer (existing; not yet driven by the index diff).
+        """
         config_to_exchange = (
             FoldersConfig(entries=[self.folder]) if self.folder else self.state.folders
         )
@@ -278,6 +285,11 @@ class P2PNode:
             dest_root = target.parent if is_file_target else target
             dest_root.mkdir(parents=True, exist_ok=True)
 
+            local_index = await FolderIndex.build(local_entry.id, target, local_entry.recursive)
+            index_exchange = IndexExchange(local_index)
+            # Captured for the upcoming diff/selective-transfer step.
+            peer_index = await index_exchange.exchange(writer, reader, is_source=False)
+
             await recv_folder_and_extract(reader, writer, dest_root)
             print(f"[+] '{local_entry.id}' received and extracted to {dest_root}")
         else:
@@ -285,4 +297,9 @@ class P2PNode:
                 raise ValueError("Client mode requires folder to be set")
 
             await exchange.exchange_and_validate(writer, reader, peer_id, is_source=True)
+
+            local_index = await FolderIndex.build(self.folder.id, self.folder.path, self.folder.recursive)
+            index_exchange = IndexExchange(local_index)
+            peer_index = await index_exchange.exchange(writer, reader, is_source=True)
+
             await send_path_as_zip(writer, reader, self.folder)
