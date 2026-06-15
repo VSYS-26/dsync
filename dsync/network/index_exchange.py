@@ -16,7 +16,7 @@ import yaml
 
 from dsync.integrity import compute_sha256
 from dsync.network.errors import FrameValidationError
-from dsync.network.p2p_core import async_recv_config, async_send_config
+from dsync.network.p2p_core import async_recv_index, async_send_index
 
 @dataclass(frozen=True)
 class FileIndexEntry:
@@ -140,10 +140,11 @@ class IndexExchange:
     The resulting pair (`own_index`, peer's `FolderIndex`) is the input
     for the upcoming diff step that decides which files actually need to move.
     
-    The wire format reuses the generic YAML-blob transport
-    (`async_send_config` / `async_recv_config`): like the folder config,
-    an index is a single YAML document exchanged once per session, so no
-    new frame is required.
+    The index is exchanged as a single YAML document over its own
+    `MsgType.INDEX` frame (`async_send_index` / `async_recv_index`). Unlike
+    the folder config, an index grows with the number of files in the
+    folder, so it has its own, much larger size limit (`MAX_INDEX_SIZE`)
+    rather than sharing the tight `MAX_CONFIG_SIZE` cap.
     """
 
     def __init__(self, own_index: FolderIndex) -> None:
@@ -199,12 +200,12 @@ class IndexExchange:
             f"[*] Sending index for folder '{self.own_index.folder_id}' with "
             f"{len(self.own_index.files)} files ({len(payload)} bytes)..."
         )
-        await async_send_config(writer, payload)
+        await async_send_index(writer, payload)
 
 
     async def _recv_peer_index(self, reader: asyncio.StreamReader) -> FolderIndex:
         print("[*] Waiting to receive peer's index...")
-        payload = await async_recv_config(reader)
+        payload = await async_recv_index(reader)
         print(f"[*] Received peer index ({len(payload)} bytes), parsing...")
         try:
             return FolderIndex.from_yaml(payload)
