@@ -8,8 +8,8 @@ from dsync.network.index_exchange import FileIndexEntry, FolderIndex
 class Role(Enum):
     """Which side of the sync session this node is acting as.
     
-    Determines which side's "only present here" entries become uploades
-    vs. downloads when classifying a diff.
+    Determines which side's "only present here" entries become uploaded
+    vs. downloaded when classifying a diff.
     """
 
     SOURCE = "source"
@@ -38,11 +38,11 @@ def diff_indexes(local: FolderIndex, peer: FolderIndex, role: Role) -> IndexDiff
     """Compare `local` and `peer` and classify every path.
     
     For each relative path:
-            - Present on both sides with the same SHA-256: `unchanged`.
-            - Present only locally, or present on both with differing SHA-256
-                and this node is the `Role.SOURCE` -> `to_upload`.
-            - Present only on the peer, or present on both with differing SHA-256
-                and this node is the `Role.RECEIVER` -> `to_download`.
+        - Present on both sides with the same SHA-256: `unchanged`.
+        - Present only locally, or present on both with differing SHA-256
+            and this node is the `Role.SOURCE` -> `to_upload`.
+        - Present only on the peer, or present on both with differing SHA-256
+            and this node is the `Role.RECEIVER` -> `to_download`.
     
     A path with diverging content on both sides is therefore assigned to
     exactly one of `to_upload` / `to_download` depending on `role`, not
