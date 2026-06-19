@@ -1,7 +1,7 @@
-"""Concrete dsync daemons.
+"""Concrete dsync daemons: the sync server and the interval-sync scheduler.
 
-Currently only the sync server runs as a daemon. Further daemons (e.g. an
-interval-sync scheduler) are added here as separate :class:`Daemon` subclasses.
+Each is a separate :class:`Daemon` subclass that supplies only its identity and
+command; the shared installer handles the OS-specific service plumbing.
 """
 
 from __future__ import annotations
@@ -61,6 +61,44 @@ class ServerDaemon(Daemon):
             "server",
             "--port",
             str(self.port),
+            "--cert",
+            self.cert,
+            "--key",
+            self.key,
+        ]
+
+
+class SchedulerDaemon(Daemon):
+    """Runs ``scheduler run`` to perform interval-based syncs in the background."""
+
+    def __init__(self, config_dir: Path, cert: str, key: str) -> None:
+        """Bind the scheduler daemon to a config directory and its TLS options.
+
+        Args:
+            config_dir: Directory holding the dsync configuration.
+            cert: Path to the TLS certificate.
+            key: Path to the TLS private key.
+        """
+        super().__init__(config_dir)
+        self.cert = cert
+        self.key = key
+
+    @property
+    def service_name(self) -> str:
+        """OS-unique service name for the scheduler."""
+        return "dsync-scheduler"
+
+    @property
+    def description(self) -> str:
+        """Human-readable description of the scheduler daemon."""
+        return "dsync - decentralized file sync interval scheduler daemon"
+
+    def command(self) -> list[str]:
+        """Return the argv that runs the scheduler loop."""
+        return [
+            *_base_argv(self.config_dir),
+            "scheduler",
+            "run",
             "--cert",
             self.cert,
             "--key",
