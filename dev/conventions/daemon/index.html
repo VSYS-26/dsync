@@ -1011,6 +1011,40 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#server-daemon" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Server-Daemon
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scheduler-daemon-sync-nach-zeitintervall" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scheduler-Daemon (Sync nach Zeitintervall)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Scheduler-Daemon (Sync nach Zeitintervall)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zeitplan-pro-ordner" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Zeitplan pro Ordner
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#befehle" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1018,6 +1052,33 @@
       
     </span>
   </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#logging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Logging
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#config-aenderungen-und-der-server-daemon" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Config-Aenderungen und der Server-Daemon
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1117,9 +1178,13 @@ hochfaehrt. Die Daemon-Erstellung ist abstrahiert: eine Basisklasse <code>Daemon
 (<code>dsync/daemon/installer.py</code>) kapseln die OS-spezifische Installation
 (systemd / launchd / Windows-Service). Konkrete Daemons liegen in
 <code>dsync/daemon/daemons.py</code>.</p>
-<p>Aktuell gibt es den <code>server</code>-Daemon: er stellt den Sync-Server bereit, damit sich
-andere Geraete fuer Backup/Mirror verbinden koennen. Weitere Daemons lassen sich
-nach demselben Muster ergaenzen.</p>
+<p>Aktuell gibt es zwei Daemons, die unabhaengig voneinander aktiviert werden koennen:</p>
+<ul>
+<li><code>server</code>: stellt den Sync-Server bereit, damit sich andere Geraete fuer
+  Backup/Mirror verbinden koennen.</li>
+<li><code>scheduler</code>: fuehrt Ordner-Syncs automatisch nach einem Cron-Zeitplan aus.</li>
+</ul>
+<p>Weitere Daemons lassen sich nach demselben Muster ergaenzen.</p>
 <hr />
 <h2 id="voraussetzung">Voraussetzung<a class="headerlink" href="#voraussetzung" title="Permanent link">&para;</a></h2>
 <p><code>dsync</code> muss installiert sein und die ausfuehrbare Binary muss fuer systemd
@@ -1136,8 +1201,8 @@ funktionieren.</p>
 </code></pre></div>
 <p>Anschliessend in das gewuenschte Config-Verzeichnis legen.</p>
 <hr />
-<h2 id="befehle">Befehle<a class="headerlink" href="#befehle" title="Permanent link">&para;</a></h2>
-<p><code>--config-dir</code> ist eine top-level Option und steht VOR <code>server</code>.</p>
+<h2 id="server-daemon">Server-Daemon<a class="headerlink" href="#server-daemon" title="Permanent link">&para;</a></h2>
+<p><code>--config-dir</code> ist eine top-level Option und steht VOR dem Befehlsnamen.</p>
 <div class="highlight"><pre><span></span><code>dsync<span class="w"> </span>--config-dir<span class="w"> </span>&lt;dir&gt;<span class="w"> </span>server<span class="w"> </span><span class="nb">enable</span><span class="w"> </span>--port<span class="w"> </span><span class="m">9999</span><span class="w"> </span>--cert<span class="w"> </span>cert.pem<span class="w"> </span>--key<span class="w"> </span>key.pem
 dsync<span class="w"> </span>--config-dir<span class="w"> </span>&lt;dir&gt;<span class="w"> </span>server<span class="w"> </span>status
 dsync<span class="w"> </span>--config-dir<span class="w"> </span>&lt;dir&gt;<span class="w"> </span>server<span class="w"> </span>disable
@@ -1148,27 +1213,78 @@ ihn und schreibt <code>daemon.yaml</code> in das Config-Verzeichnis. Optionen-De
 <p>Die CLI liegt unter <code>dsync/cli/commands/server/</code>, die geteilte enable/disable/
 status-Logik in <code>dsync/cli/daemon_ops.py</code>.</p>
 <hr />
+<h2 id="scheduler-daemon-sync-nach-zeitintervall">Scheduler-Daemon (Sync nach Zeitintervall)<a class="headerlink" href="#scheduler-daemon-sync-nach-zeitintervall" title="Permanent link">&para;</a></h2>
+<p>Der <code>scheduler</code>-Daemon fuehrt konfigurierte Ordner automatisch nach einem
+Cron-Zeitplan aus. Er nutzt exakt denselben Code-Pfad wie ein manueller
+<code>dsync sync run</code>.</p>
+<h3 id="zeitplan-pro-ordner">Zeitplan pro Ordner<a class="headerlink" href="#zeitplan-pro-ordner" title="Permanent link">&para;</a></h3>
+<p>Ein Ordner laeuft automatisch, sobald er ein <code>interval</code> (Cron-Ausdruck) hat:</p>
+<div class="highlight"><pre><span></span><code>dsync<span class="w"> </span>--config-dir<span class="w"> </span>&lt;dir&gt;<span class="w"> </span>folder<span class="w"> </span>add<span class="w"> </span>docs<span class="w"> </span>/pfad<span class="w"> </span>--mode<span class="w"> </span>backup-to-peer<span class="w"> </span>--interval<span class="w"> </span><span class="s1">&#39;*/30 * * * *&#39;</span>
+dsync<span class="w"> </span>--config-dir<span class="w"> </span>&lt;dir&gt;<span class="w"> </span>folder<span class="w"> </span>mod<span class="w"> </span>docs<span class="w"> </span>--interval<span class="w"> </span><span class="s1">&#39;0 2 * * *&#39;</span><span class="w">   </span><span class="c1"># Zeitplan aendern</span>
+dsync<span class="w"> </span>--config-dir<span class="w"> </span>&lt;dir&gt;<span class="w"> </span>folder<span class="w"> </span>mod<span class="w"> </span>docs<span class="w"> </span>--clear-interval<span class="w">         </span><span class="c1"># Zeitplan entfernen</span>
+</code></pre></div>
+<p>Ohne <code>interval</code> wird der Ordner nur manuell synchronisiert. Ungueltige
+Cron-Ausdruecke werden beim Anlegen/Aendern abgelehnt.</p>
+<p>Verhalten:</p>
+<ul>
+<li>Jeder Ordner hat seinen eigenen Cron-Ausdruck und seinen eigenen
+  Lauf-Zeitstempel. Der Scheduler pollt alle 30 s und startet jeden faelligen
+  Ordner.</li>
+<li>Verpasste Laeufe werden nachgeholt: war das Geraet zum geplanten Zeitpunkt aus,
+  laeuft der Ordner einmalig beim naechsten Tick.</li>
+<li><code>backup-from-peer</code> ist receive-only und wird uebersprungen (mit einmaliger
+  Warnung im Log).</li>
+<li>Cron wird in lokaler Zeit ausgewertet.</li>
+</ul>
+<h3 id="befehle">Befehle<a class="headerlink" href="#befehle" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code>dsync<span class="w"> </span>--config-dir<span class="w"> </span>&lt;dir&gt;<span class="w"> </span>scheduler<span class="w"> </span><span class="nb">enable</span><span class="w"> </span>--cert<span class="w"> </span>cert.pem<span class="w"> </span>--key<span class="w"> </span>key.pem
+dsync<span class="w"> </span>--config-dir<span class="w"> </span>&lt;dir&gt;<span class="w"> </span>scheduler<span class="w"> </span>status
+dsync<span class="w"> </span>--config-dir<span class="w"> </span>&lt;dir&gt;<span class="w"> </span>scheduler<span class="w"> </span>disable
+dsync<span class="w"> </span>--config-dir<span class="w"> </span>&lt;dir&gt;<span class="w"> </span>scheduler<span class="w"> </span>run<span class="w"> </span>--cert<span class="w"> </span>cert.pem<span class="w"> </span>--key<span class="w"> </span>key.pem<span class="w">   </span><span class="c1"># Vordergrund (Debug)</span>
+</code></pre></div>
+<p><code>scheduler enable</code> legt den OS-Dienst <code>dsync-scheduler</code> an und schreibt
+<code>scheduler.yaml</code>. <code>scheduler run</code> ist die Daemon-Nutzlast und laeuft im
+Vordergrund - praktisch zum Testen ohne System-Installation.</p>
+<p>Die CLI liegt unter <code>dsync/cli/commands/scheduler/</code>, der Loop in
+<code>dsync/scheduler/runner.py</code>.</p>
+<h3 id="logging">Logging<a class="headerlink" href="#logging" title="Permanent link">&para;</a></h3>
+<p>Der Scheduler protokolliert jeden Lauf (Start und Ergebnis) nach
+<code>&lt;config-dir&gt;/logs/dsync-scheduler.log</code> und auf stdout (unter Linux ins Journal):</p>
+<div class="highlight"><pre><span></span><code>folder=docs running
+folder=docs result=success total=1 failed=0 duration=2.3s
+</code></pre></div>
+<p>Erfolgreiche Laeufe werden in <code>&lt;config-dir&gt;/scheduler-state.json</code> festgehalten;
+fehlgeschlagene bleiben faellig und werden beim naechsten Tick erneut versucht.</p>
+<h3 id="config-aenderungen-und-der-server-daemon">Config-Aenderungen und der Server-Daemon<a class="headerlink" href="#config-aenderungen-und-der-server-daemon" title="Permanent link">&para;</a></h3>
+<p><code>folder add/mod/rm</code> startet den <code>server</code>-Daemon neu - aber nur, wenn er vorher
+aktiviert (und laufend) war -, damit neue Ordner/Geraete sofort greifen. Der
+Scheduler braucht keinen Neustart: er laedt die Config bei jedem Tick neu.</p>
+<hr />
 <h2 id="pro-betriebssystem">Pro Betriebssystem<a class="headerlink" href="#pro-betriebssystem" title="Permanent link">&para;</a></h2>
 <h3 id="linux-systemd">Linux (systemd)<a class="headerlink" href="#linux-systemd" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Unit: <code>/etc/systemd/system/dsync-server.service</code>, Autostart via
+<li>Units: <code>/etc/systemd/system/dsync-server.service</code> und
+  <code>/etc/systemd/system/dsync-scheduler.service</code>, Autostart via
   <code>WantedBy=multi-user.target</code>.</li>
 <li><code>enable</code>/<code>disable</code> rufen intern <code>sudo systemctl ...</code> (Passwort-Abfrage).</li>
 <li>Logs landen im Journal:</li>
 </ul>
 <div class="highlight"><pre><span></span><code>journalctl<span class="w"> </span>-u<span class="w"> </span>dsync-server<span class="w"> </span>--no-pager<span class="w"> </span><span class="p">|</span><span class="w"> </span>tail
+journalctl<span class="w"> </span>-u<span class="w"> </span>dsync-scheduler<span class="w"> </span>--no-pager<span class="w"> </span><span class="p">|</span><span class="w"> </span>tail
 </code></pre></div>
 <h3 id="macos-launchd">macOS (launchd)<a class="headerlink" href="#macos-launchd" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Agent: <code>~/Library/LaunchAgents/dsync-server.plist</code> (<code>RunAtLoad</code>).</li>
+<li>Agents: <code>~/Library/LaunchAgents/dsync-server.plist</code> und
+  <code>~/Library/LaunchAgents/dsync-scheduler.plist</code> (<code>RunAtLoad</code>).</li>
 <li>Logs unter <code>&lt;config-dir&gt;/logs/</code>.</li>
 </ul>
 <h3 id="windows">Windows<a class="headerlink" href="#windows" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Windows-Dienst via <code>pywin32</code>; <code>server enable</code>/<code>disable</code> in einer
+<li>Windows-Dienste via <code>pywin32</code>; <code>enable</code>/<code>disable</code> in einer
   Administrator-Konsole ausfuehren.</li>
 </ul>
 <div class="highlight"><pre><span></span><code><span class="nb">sc </span><span class="n">query</span> <span class="n">dsync-server</span>
+<span class="nb">sc </span><span class="n">query</span> <span class="n">dsync-scheduler</span>
 </code></pre></div>
 <hr />
 <h2 id="konfiguration">Konfiguration<a class="headerlink" href="#konfiguration" title="Permanent link">&para;</a></h2>
@@ -1179,11 +1295,18 @@ status-Logik in <code>dsync/cli/daemon_ops.py</code>.</p>
 <span class="nt">cert</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cert.pem</span>
 <span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">key.pem</span>
 </code></pre></div>
+<p><code>scheduler enable</code> schreibt <code>scheduler.yaml</code> (<code>dsync/config/scheduler.py</code>); beide
+Dateien koexistieren:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="nt">cert</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cert.pem</span>
+<span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">key.pem</span>
+</code></pre></div>
 <hr />
 <h2 id="entfernen">Entfernen<a class="headerlink" href="#entfernen" title="Permanent link">&para;</a></h2>
-<p><code>dsync --config-dir &lt;dir&gt; server disable</code> stoppt den Dienst, entfernt den OS-Dienst
-und den Boot-Autostart. Bei einer Bundle-Installation wird anschliessend das Bundle
-selbst entfernt (siehe <a href="../installation/">Installation</a>).</p>
+<p><code>dsync --config-dir &lt;dir&gt; server disable</code> bzw.
+<code>dsync --config-dir &lt;dir&gt; scheduler disable</code> stoppt den jeweiligen Dienst, entfernt
+den OS-Dienst und den Boot-Autostart. Bei einer Bundle-Installation wird
+anschliessend das Bundle selbst entfernt (siehe <a href="../installation/">Installation</a>).</p>
 
 
 
