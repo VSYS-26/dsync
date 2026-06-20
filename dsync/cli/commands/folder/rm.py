@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 
 def rm(ctx: typer.Context, id: Annotated[str, typer.Argument(help="Unique folder id")]) -> None:
-    """Remove a configured folder.."""
+    """Remove a configured folder."""
     state: AppState = ctx.obj
 
     filtered = list(filter(lambda f: f.id == id, state.folders.entries))
