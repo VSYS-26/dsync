@@ -6,9 +6,9 @@ import asyncio
 import hashlib
 from typing import TYPE_CHECKING, Annotated
 
-import typer
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
+import typer
 
 from dsync.cli.console import error, info, success, warn
 from dsync.identity import PeerMapStore
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from dsync.state import AppState
 
 
-def _get_own_fingerprint(cert_path: str, key_path: str) -> str | None:
+def _get_own_fingerprint(cert_path: str, key_path: str) -> str | None:  # noqa: ARG001
     """Extract fingerprint from the TLS certificate (matches devices.yaml)."""
     try:
         from pathlib import Path

@@ -23,4 +23,3 @@ class PeerAuthError(Exception):
 
 class ConfigConflictError(Exception):
     """Raised when circular sync configuration is detected between peers."""
-    pass

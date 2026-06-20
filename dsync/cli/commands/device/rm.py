@@ -10,10 +10,7 @@ from dsync.cli.console import error, success
 from dsync.state import AppState
 
 
-def rm(
-    ctx: typer.Context,
-    id: Annotated[str, typer.Argument(help="Unique device id")]
-) -> None:
+def rm(ctx: typer.Context, id: Annotated[str, typer.Argument(help="Unique device id")]) -> None:
     """Remove a trusted device."""
     state: AppState = ctx.obj
 

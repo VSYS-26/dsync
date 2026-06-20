@@ -30,6 +30,15 @@ dev = [
     "bandit>=1.8",
     "pyinstaller>=6.11",
 ]
+test = [
+    "pytest>=8",
+    "pytest-asyncio>=0.25",
+    "pytest-cov>=6",
+]
+lint = [
+    "mypy>=1.13",
+    "types-pyyaml>=6.0",
+]
 
 [project.scripts]
 dsync = "dsync.main:main"
@@ -137,17 +146,6 @@ ignore_missing_imports = true
 exclude_dirs = ["tests", ".venv"]
 skips = ["B101"]
 
-[dependency-groups]
-test = [
-    "pytest>=8",
-    "pytest-asyncio>=0.25",
-    "pytest-cov>=6",
-]
-lint = [
-    "mypy>=1.0",
-    "types-pyyaml>=6.0",
-]
-
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 addopts = "--cov=dsync --cov-report=term-missing --cov-fail-under=70"
@@ -169,3 +167,4 @@ omit = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["D", "ARG001", "ARG002", "S101"]
+"dsync/cli/commands/**" = ["A001", "A002", "A004", "TC001", "TC002", "TC003"]

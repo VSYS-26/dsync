@@ -131,12 +131,9 @@ def is_valid_fingerprint(fp: str) -> bool:
             return False
         return len(decoded) == 32
 
-    if len(fp) == 64 and all(c in "0123456789abcdefABCDEF" for c in fp):
-        return True
+    return len(fp) == 64 and all(c in "0123456789abcdefABCDEF" for c in fp)
 
-    return False
-  
-  
+
 def generate_and_store_keypair_securely(
     force: bool = False,
     warn_on_existing: bool = True,

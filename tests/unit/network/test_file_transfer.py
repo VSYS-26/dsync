@@ -11,10 +11,10 @@ from dsync.network.p2p_core import MsgType, async_send_msg
 
 
 async def _send_and_recv(stream_pair, src_path: Path, src_root: Path, dest_root: Path) -> Path:
-    (_reader_a, writer_a), (reader_b, _writer_b) = stream_pair
+    (reader_a, writer_a), (reader_b, writer_b) = stream_pair
     await asyncio.gather(
-        send_file(writer_a, src_path, src_root),
-        recv_file(reader_b, dest_root),
+        send_file(writer_a, reader_a, src_path, src_root),
+        recv_file(reader_b, writer_b, dest_root),
     )
     return dest_root / src_path.relative_to(src_root)
 
@@ -83,7 +83,7 @@ async def test_sha256_verified_after_transfer(stream_pair, tmp_path: Path) -> No
 
 
 async def test_path_traversal_rejected(stream_pair, tmp_path: Path) -> None:
-    (_reader_a, writer_a), (reader_b, _writer_b) = stream_pair
+    (_reader_a, writer_a), (reader_b, writer_b) = stream_pair
     dst = tmp_path / "dst"
     dst.mkdir()
 
@@ -91,11 +91,11 @@ async def test_path_traversal_rejected(stream_pair, tmp_path: Path) -> None:
     await async_send_msg(writer_a, MsgType.FILE_META, yaml.dump(meta).encode())
 
     with pytest.raises(TransferIntegrityError):
-        await recv_file(reader_b, dst)
+        await recv_file(reader_b, writer_b, dst)
 
 
 async def test_absolute_path_rejected(stream_pair, tmp_path: Path) -> None:
-    (_reader_a, writer_a), (reader_b, _writer_b) = stream_pair
+    (_reader_a, writer_a), (reader_b, writer_b) = stream_pair
     dst = tmp_path / "dst"
     dst.mkdir()
 
@@ -103,11 +103,11 @@ async def test_absolute_path_rejected(stream_pair, tmp_path: Path) -> None:
     await async_send_msg(writer_a, MsgType.FILE_META, yaml.dump(meta).encode())
 
     with pytest.raises(TransferIntegrityError):
-        await recv_file(reader_b, dst)
+        await recv_file(reader_b, writer_b, dst)
 
 
 async def test_tampered_content_raises_integrity_error(stream_pair, tmp_path: Path) -> None:
-    (_reader_a, writer_a), (reader_b, _writer_b) = stream_pair
+    (_reader_a, writer_a), (reader_b, writer_b) = stream_pair
     dst = tmp_path / "dst"
     dst.mkdir()
 
@@ -119,13 +119,13 @@ async def test_tampered_content_raises_integrity_error(stream_pair, tmp_path: Pa
     await async_send_msg(writer_a, MsgType.FILE_CHUNK, tampered)
 
     with pytest.raises(TransferIntegrityError, match="SHA-256"):
-        await recv_file(reader_b, dst)
+        await recv_file(reader_b, writer_b, dst)
 
 
 async def test_send_file_not_found_raises(stream_pair, tmp_path: Path) -> None:
-    (_reader_a, writer_a), (_reader_b, _writer_b) = stream_pair
+    (reader_a, writer_a), (_reader_b, _writer_b) = stream_pair
     with pytest.raises(FileNotFoundError):
-        await send_file(writer_a, tmp_path / "nonexistent.txt", tmp_path)
+        await send_file(writer_a, reader_a, tmp_path / "nonexistent.txt", tmp_path)
 
 
 def test_file_meta_yaml_roundtrip() -> None:
@@ -267,11 +267,11 @@ async def test_oversized_chunk_raises(stream_pair, tmp_path: Path) -> None:
 
 
 async def test_recv_file_non_meta_first_frame_raises(stream_pair, tmp_path: Path) -> None:
-    (_reader_a, writer_a), (reader_b, _writer_b) = stream_pair
+    (_reader_a, writer_a), (reader_b, writer_b) = stream_pair
     dst = tmp_path / "dst"
     dst.mkdir()
 
     await async_send_msg(writer_a, MsgType.FILE_CHUNK, b"x" * 10)
 
     with pytest.raises(TransferIntegrityError, match="meta"):
-        await recv_file(reader_b, dst)
+        await recv_file(reader_b, writer_b, dst)

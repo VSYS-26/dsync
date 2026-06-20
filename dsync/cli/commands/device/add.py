@@ -8,8 +8,8 @@ import typer
 
 from dsync.cli.console import error, success
 from dsync.config import TrustedDevice
-from dsync.state import AppState
 from dsync.crypto import is_valid_fingerprint
+from dsync.state import AppState
 
 
 def add(
@@ -29,18 +29,13 @@ def add(
         raise typer.Exit(code=1)
 
     if not is_valid_fingerprint(fingerprint):
-        error(f"Fingerprint does not match expected format")
+        error("Fingerprint does not match expected format")
         raise typer.Exit(code=1)
 
-    state.devices.trusted_devices.append(
-        TrustedDevice(
-            id=id,
-            fingerprint=fingerprint
-        )
-    )
+    state.devices.trusted_devices.append(TrustedDevice(id=id, fingerprint=fingerprint))
 
     state.devices.save(state.config_dir, overwrite=True)
-    e = list(filter(lambda f: f.id == id, state.devices.trusted_devices))[0]
+    e = next(filter(lambda f: f.id == id, state.devices.trusted_devices))
     lines = [
         "Added device:",
         f"    • {e.id}",

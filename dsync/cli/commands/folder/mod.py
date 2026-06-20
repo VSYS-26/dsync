@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 # Path is needed at runtime: typer resolves the annotation at registration.
-from pathlib import Path  # noqa: TC003
+from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
 from pydantic import ValidationError
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 def mod(
     ctx: typer.Context,
-    id: Annotated[str, typer.Argument(help="Unique folder id")],  # noqa: A002
+    id: Annotated[str, typer.Argument(help="Unique folder id")],
     path: Annotated[Path | None, typer.Option("--path", "-p", help="Folder path")] = None,
     mode: Annotated[SyncMode | None, typer.Option("--mode", help="Sync mode")] = None,
     devices: Annotated[

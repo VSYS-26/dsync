@@ -1,10 +1,4 @@
-"""Type stubs for keyring module."""
-
-class KeyringError(Exception):
-    """Base exception for keyring errors."""
-
-class PasswordSetError(KeyringError):
-    """Exception raised when password setting fails."""
+"""Type stubs for the keyring package."""
 
 class KeyringBackend:
     """Base class for keyring backends."""

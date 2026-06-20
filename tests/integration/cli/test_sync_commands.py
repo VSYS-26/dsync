@@ -105,6 +105,160 @@ def test_sync_start_server_mode(
     assert mock_cls.call_args.args[0] is True  # is_server=True
 
 
+def test_sync_start_client_with_folder_id_infers_peer(
+    cli_runner: CliRunner, tmp_config_dir: Path, tmp_path: Path
+) -> None:
+    patcher, mock_cls, _mock_node = _mock_p2p_node("dsync.cli.commands.sync.start.P2PNode")
+    cert = str(tmp_path / "cert.pem")
+    key = str(tmp_path / "key.pem")
+    (tmp_path / "cert.pem").write_text("dummy")
+    (tmp_path / "key.pem").write_text("dummy")
+    src = tmp_path / "src"
+    src.mkdir()
+    _add_device(cli_runner, tmp_config_dir, "dev-a", _FP_A)
+    _add_folder(cli_runner, tmp_config_dir, "f1", str(src), "mirror", device="dev-a")
+
+    with patcher:
+        result = _invoke(
+            cli_runner,
+            tmp_config_dir,
+            "sync",
+            "start",
+            "--mode",
+            "client",
+            "--folder-id",
+            "f1",
+            "--host",
+            "127.0.0.1",
+            "--cert",
+            cert,
+            "--key",
+            key,
+        )
+
+    assert result.exit_code == 0
+    assert "Auto-inferred peer device 'dev-a'" in result.output
+    assert mock_cls.call_args.kwargs["folder"].id == "f1"
+
+
+def test_sync_start_unknown_folder_id_fails(
+    cli_runner: CliRunner, tmp_config_dir: Path, tmp_path: Path
+) -> None:
+    cert = str(tmp_path / "cert.pem")
+    key = str(tmp_path / "key.pem")
+    (tmp_path / "cert.pem").write_text("dummy")
+    (tmp_path / "key.pem").write_text("dummy")
+
+    result = _invoke(
+        cli_runner,
+        tmp_config_dir,
+        "sync",
+        "start",
+        "--mode",
+        "client",
+        "--folder-id",
+        "ghost",
+        "--cert",
+        cert,
+        "--key",
+        key,
+    )
+
+    assert result.exit_code != 0
+
+
+def test_sync_start_server_with_fingerprint_starts_announcer(
+    cli_runner: CliRunner, tmp_config_dir: Path, tmp_path: Path
+) -> None:
+    patcher, _mock_cls, _mock_node = _mock_p2p_node("dsync.cli.commands.sync.start.P2PNode")
+    cert = str(tmp_path / "cert.pem")
+    key = str(tmp_path / "key.pem")
+    (tmp_path / "cert.pem").write_text("dummy")
+    (tmp_path / "key.pem").write_text("dummy")
+    mock_announcer = MagicMock()
+
+    with (
+        patcher,
+        patch("dsync.cli.commands.sync.start._get_own_fingerprint", return_value="a" * 64),
+        patch(
+            "dsync.cli.commands.sync.start.FingerprintAnnouncer", return_value=mock_announcer
+        ) as mock_announcer_cls,
+    ):
+        result = _invoke(
+            cli_runner,
+            tmp_config_dir,
+            "sync",
+            "start",
+            "--mode",
+            "server",
+            "--cert",
+            cert,
+            "--key",
+            key,
+        )
+
+    assert result.exit_code == 0
+    mock_announcer_cls.assert_called_once_with(fingerprint="a" * 64)
+    mock_announcer.start.assert_called_once()
+    mock_announcer.stop.assert_called_once()
+
+
+def test_sync_start_keyboard_interrupt_handled(
+    cli_runner: CliRunner, tmp_config_dir: Path, tmp_path: Path
+) -> None:
+    cert = str(tmp_path / "cert.pem")
+    key = str(tmp_path / "key.pem")
+    (tmp_path / "cert.pem").write_text("dummy")
+    (tmp_path / "key.pem").write_text("dummy")
+    mock_node = MagicMock()
+    mock_node.start = AsyncMock(side_effect=KeyboardInterrupt)
+
+    with patch("dsync.cli.commands.sync.start.P2PNode", return_value=mock_node):
+        result = _invoke(
+            cli_runner,
+            tmp_config_dir,
+            "sync",
+            "start",
+            "--mode",
+            "client",
+            "--cert",
+            cert,
+            "--key",
+            key,
+        )
+
+    assert result.exit_code == 0
+    assert "Shutting down" in result.output
+
+
+def test_sync_start_generic_exception_handled(
+    cli_runner: CliRunner, tmp_config_dir: Path, tmp_path: Path
+) -> None:
+    cert = str(tmp_path / "cert.pem")
+    key = str(tmp_path / "key.pem")
+    (tmp_path / "cert.pem").write_text("dummy")
+    (tmp_path / "key.pem").write_text("dummy")
+    mock_node = MagicMock()
+    mock_node.start = AsyncMock(side_effect=RuntimeError("boom"))
+
+    with patch("dsync.cli.commands.sync.start.P2PNode", return_value=mock_node):
+        result = _invoke(
+            cli_runner,
+            tmp_config_dir,
+            "sync",
+            "start",
+            "--mode",
+            "client",
+            "--cert",
+            cert,
+            "--key",
+            key,
+        )
+
+    assert result.exit_code == 0
+    assert "Sync stopped" in result.output
+
+
 # ── sync run ──────────────────────────────────────────────────────────────────
 
 

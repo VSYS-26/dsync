@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 # Runtime import: Typer resolves the context type hint at registration.
-import typer  # noqa: TC002
+import typer
 
 from dsync.cli.daemon_ops import run_disable
 from dsync.config.daemon import DaemonConfig
