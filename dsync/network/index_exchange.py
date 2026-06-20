@@ -61,31 +61,26 @@ class FolderIndex:
                 
         Returns:
             A `FolderIndex` with one entry per file, sorted by path.
+            Files that vanish between the initial `is_file()` check and hashing/
+            stating (e.g. deleted by the user while the index is being built)
+            are silently skipped rather than aborting the whole index build -
+            the source folder can change concurrently while a potentially slow,
+            recursive walk is in progress.
         """
         entries: list[FileIndexEntry] = []
 
         if path.is_file():
-            digest = await asyncio.to_thread(compute_sha256, path)
-            entries.append(
-                FileIndexEntry(
-                path=path.name,
-                size=path.stat().st_size,
-                sha256=digest,
-                )
-            )
+            entry = await cls._hash_entry(path, path.name)
+            if entry is not None:
+                entries.append(entry)
         elif path.is_dir():
             iterator = path.rglob("*") if recursive else path.glob("*")
             for p in iterator:
                 if not p.is_file():
                     continue
-                digest = await asyncio.to_thread(compute_sha256, p)
-                entries.append(
-                    FileIndexEntry(
-                    path=p.relative_to(path).as_posix(),
-                    size=p.stat().st_size,
-                    sha256=digest,
-                    )
-                )
+                entry = await cls._hash_entry(p, p.relative_to(path))
+                if entry is not None:
+                    entries.append(entry)
         
         # else: path does not exist yet -> empty index, everything the
         # peer has for this folder counts as "new" from our side.
@@ -93,6 +88,26 @@ class FolderIndex:
         entries.sort(key=lambda e: e.path)
         return cls(folder_id=folder_id, generated_at=time.time(), files=entries)
     
+
+    @staticmethod
+    async def _hah_entry(p: Path, rel_path: str) -> "FileIndexEntry | None":
+        """Hash and stat one files, tolerating concurrent deletion.
+        
+        `p.is_file()` (checked by the caller) and the hash/stat calls here
+        are separate syscalls with a window between them in which the file
+        can be deleted, moved, or replaced by a directory - this is a real
+        scenario when the source folder is actively edited during a sync.
+        Returns `None` instead or propagating `FileNotFoundError` so the
+        caller can skip this entry and continue indexing the rest of the
+        Folder.
+        """
+        try:
+            digest = await asyncio.to_thread(compute_sha256, p)
+            size = p.stat().st_size
+        except FileNotFoundError:
+            return None
+        return FileIndexEntry(path=rel_path, size=size, compute_sha256=digest)
+
 
     def to_yaml(self) -> bytes:
         """Serialize this index as a YAML-encoded byte payload."""
