@@ -1,3 +1,7 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "dsync"
 version = "0.1.0"
@@ -5,18 +9,30 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "croniter>=3.0",
     "cryptography>=47.0.0",
-    "pre-commit>=4.5.1",
     "pyp2p>=0.8.3",
     "pydantic>=2.10",
     "pyyaml>=6.0.2",
     "rich>=15.0.0",
-    "ruff>=0.6.0",
     "typer>=0.24.1",
     "zeroconf>=0.148.0",
     "keyring>=25.7.0",
     "keyrings-alt>=5.0.2",
+    "pywin32>=306 ; sys_platform == 'win32'",
 ]
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.5.1",
+    "ruff>=0.6.0",
+    "mypy>=1.13",
+    "bandit>=1.8",
+    "pyinstaller>=6.11",
+]
+
+[project.scripts]
+dsync = "dsync.main:main"
 
 [tool.ruff]
 line-length = 100
@@ -107,11 +123,13 @@ mypy_path = ["stubs"]
 
 [[tool.mypy.overrides]]
 module = [
+    "croniter.*",
     "cryptography.*",
     "rich.*",
     "typer.*",
     "keyring.*",
     "yaml",
+    "win32service",
 ]
 ignore_missing_imports = true
 

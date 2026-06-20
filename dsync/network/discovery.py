@@ -130,7 +130,9 @@ class FingerprintAnnouncer:
 
         self._zeroconf = Zeroconf(ip_version=IPVersion.V4Only)
         host = socket.gethostname()
-        service_name = f"{host}-{self._fingerprint[:8]}.{SERVICE_TYPE}"
+        import os
+        # Add PID to make service name unique per process (allows server+client on same machine)
+        service_name = f"{host}-{self._fingerprint[:8]}-{os.getpid()}.{SERVICE_TYPE}"
         address = socket.inet_aton(_local_ipv4())
         self._service_info = ServiceInfo(
             type_=SERVICE_TYPE,
