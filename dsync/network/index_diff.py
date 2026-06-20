@@ -68,9 +68,9 @@ def diff_indexes(local: FolderIndex, peer: FolderIndex, role: Role) -> IndexDiff
     local_by_path = local.as_dict()
     peer_by_path = peer.as_dict()
 
-    to_upload = list[FileIndexEntry] = []
-    to_download = list[FileIndexEntry] = []
-    unchanged = list[str] = []
+    to_upload: list[FileIndexEntry] = []
+    to_download: list[FileIndexEntry] = []
+    unchanged: list[str] = []
 
     all_paths = sorted(local_by_path.keys() | peer_by_path.keys())
 
@@ -92,16 +92,16 @@ def diff_indexes(local: FolderIndex, peer: FolderIndex, role: Role) -> IndexDiff
             # else: receiver-only local file with no peer counterpart is
             # not something this transfer model can act on (nothing to
             # download for it, and a receiver does not currently upload).
-            else:
-                # Only on the peer's side. peer_entry is guaranteed non-None
-                # here since path came from local_py_path | peer_by_path and
-                # local_entry is None.
-                assert peer_entry is not None
-                if role is Role.RECEIVER:
-                    to_download.append(peer_entry)
-                # else: source-side has nothing to do with a peer-only file
-                # in this transfer model (a source does not currently 
-                # request downloads).
+        else:
+            # Only on the peer's side. peer_entry is guaranteed non-None
+            # here since path came from local_py_path | peer_by_path and
+            # local_entry is None.
+            assert peer_entry is not None
+            if role is Role.RECEIVER:
+                to_download.append(peer_entry)
+            # else: source-side has nothing to do with a peer-only file
+            # in this transfer model (a source does not currently 
+            # request downloads).
 
     return IndexDiff(to_upload=to_upload, to_download=to_download, unchanged=unchanged)
     

@@ -314,11 +314,10 @@ class P2PNode:
             peer_index = await index_exchange.exchange(writer, reader, is_source=True)
 
             diff = diff_indexes(local_index, peer_index, role=Role.SOURCE)
-            if not diff.to_upload:
-                print(
-                    f"[*] Diff: '{len(diff.to_upload)}' to upload, "
-                    f"{len(diff.unchanged)} unchanged (skipped)"
-                )
+            print(
+                f"[*] Diff: '{len(diff.to_upload)}' to upload, "
+                f"{len(diff.unchanged)} unchanged (skipped)"
+            )
                 
             if not diff.to_upload:
                 print(f"[+] '{self.folder.id}' already up to date, nothing to transfer")
