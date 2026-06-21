@@ -19,6 +19,7 @@ dependencies = [
     "typer>=0.24.1",
     "keyring>=25.7.0",
     "keyrings-alt>=5.0.2",
+    "zeroconf>=0.130.0",
     "pywin32>=306 ; sys_platform == 'win32'",
 ]
 
