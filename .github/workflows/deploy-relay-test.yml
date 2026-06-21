@@ -55,7 +55,7 @@ jobs:
             docker run -d \
               --name dsync-relay-test \
               --restart unless-stopped \
-              -p 9000:9000/udp \
+              --network host \
               -v "$RELAY_DIR/cert.pem:/app/cert.pem:ro" \
               -v "$RELAY_DIR/key.pem:/app/key.pem:ro" \
               "$IMAGE:$TAG" \
