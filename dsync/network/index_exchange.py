@@ -78,7 +78,7 @@ class FolderIndex:
             for p in iterator:
                 if not p.is_file():
                     continue
-                entry = await cls._hash_entry(p, p.relative_to(path))
+                entry = await cls._hash_entry(p, p.relative_to(path).as_posix())
                 if entry is not None:
                     entries.append(entry)
         
@@ -90,14 +90,14 @@ class FolderIndex:
     
 
     @staticmethod
-    async def _hah_entry(p: Path, rel_path: str) -> "FileIndexEntry | None":
-        """Hash and stat one files tolerating concurrent deletion.
-        
+    async def _hash_entry(p: Path, rel_path: str) -> "FileIndexEntry | None":
+        """Hash and stat one file, tolerating concurrent deletion.
+
         `p.is_file()` (checked by the caller) and the hash/stat calls here
         are separate syscalls with a window between them in which the file
         can be deleted, moved, or replaced by a directory - this is a real
         scenario when the source folder is actively edited during a sync.
-        Returns `None` instead or propagating `FileNotFoundError` so the
+        Returns `None` instead of propagating `FileNotFoundError` so the
         caller can skip this entry and continue indexing the rest of the
         Folder.
         """
@@ -106,7 +106,7 @@ class FolderIndex:
             size = p.stat().st_size
         except FileNotFoundError:
             return None
-        return FileIndexEntry(path=rel_path, size=size, compute_sha256=digest)
+        return FileIndexEntry(path=rel_path, size=size, sha256=digest)
 
 
     def to_yaml(self) -> bytes:
