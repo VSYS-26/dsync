@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-import typer
+from typing import TYPE_CHECKING
 
 from dsync.cli.console import success
+
+if TYPE_CHECKING:
+    import typer
 
 
 def list(ctx: typer.Context) -> None:

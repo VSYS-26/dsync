@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import typer
 
 from dsync.cli.console import error, success
 from dsync.config import TrustedDevice
 from dsync.crypto import is_valid_fingerprint
-from dsync.state import AppState
+
+if TYPE_CHECKING:
+    from dsync.state import AppState
 
 
 def add(

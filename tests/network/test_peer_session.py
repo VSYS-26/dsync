@@ -15,6 +15,7 @@ caller tries to run the wrong side of a backup session.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import datetime
 import hashlib
 import socket
@@ -47,7 +48,6 @@ from dsync.state import AppState
 
 if TYPE_CHECKING:
     from pathlib import Path
-
 
 
 def _write_self_signed(cert_path: Path, key_path: Path) -> str:
@@ -104,8 +104,7 @@ def _make_app_state(
     )
     devices = DevicesConfig(
         trusted_devices=[
-            TrustedDevice(id=pid, fingerprint=fp, relay_id="relay-test")
-            for pid, fp in trusted
+            TrustedDevice(id=pid, fingerprint=fp, relay_id="relay-test") for pid, fp in trusted
         ]
     )
     folders = FoldersConfig(entries=[])
@@ -167,9 +166,9 @@ async def test_source_to_peer_file_transfer(tmp_path: Path) -> None:
     # The listener-side session stream future is filled by the stream handler
     # the very first time the dialer opens a stream.
     loop = asyncio.get_running_loop()
-    listener_stream: asyncio.Future[
-        tuple[asyncio.StreamReader, asyncio.StreamWriter]
-    ] = loop.create_future()
+    listener_stream: asyncio.Future[tuple[asyncio.StreamReader, asyncio.StreamWriter]] = (
+        loop.create_future()
+    )
 
     def on_stream(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         if not listener_stream.done():
@@ -221,9 +220,7 @@ async def test_source_to_peer_file_transfer(tmp_path: Path) -> None:
             )
 
         async def run_peer() -> str:
-            peer_reader, peer_writer = await asyncio.wait_for(
-                listener_stream, timeout=5.0
-            )
+            peer_reader, peer_writer = await asyncio.wait_for(listener_stream, timeout=5.0)
             return await peer_session.run(
                 peer_reader,
                 peer_writer,
@@ -241,20 +238,14 @@ async def test_source_to_peer_file_transfer(tmp_path: Path) -> None:
         # File should now exist under recv_dir/<source-device>/hello.bin
         received_path = recv_dir / "source-device" / "hello.bin"
         assert received_path.is_file()
-        assert (
-            hashlib.sha256(received_path.read_bytes()).hexdigest() == expected_digest
-        )
+        assert hashlib.sha256(received_path.read_bytes()).hexdigest() == expected_digest
     finally:
         if dialer_endpoint is not None:
-            try:
+            with contextlib.suppress(Exception):
                 dialer_endpoint.transport.close()
-            except Exception:
-                pass
         if listener_endpoint is not None:
-            try:
+            with contextlib.suppress(Exception):
                 listener_endpoint.transport.close()
-            except Exception:
-                pass
         dialer_sock.close()
         listener_sock.close()
 
@@ -293,9 +284,9 @@ async def test_unknown_peer_fingerprint_is_rejected(tmp_path: Path) -> None:
     listener_cfg = build_quic_configuration(is_client=False, cert_path=peer_cert, key_path=peer_key)
 
     loop = asyncio.get_running_loop()
-    listener_stream: asyncio.Future[
-        tuple[asyncio.StreamReader, asyncio.StreamWriter]
-    ] = loop.create_future()
+    listener_stream: asyncio.Future[tuple[asyncio.StreamReader, asyncio.StreamWriter]] = (
+        loop.create_future()
+    )
 
     def on_stream(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         if not listener_stream.done():
@@ -343,9 +334,7 @@ async def test_unknown_peer_fingerprint_is_rejected(tmp_path: Path) -> None:
             )
 
         async def run_peer() -> str:
-            peer_reader, peer_writer = await asyncio.wait_for(
-                listener_stream, timeout=5.0
-            )
+            peer_reader, peer_writer = await asyncio.wait_for(listener_stream, timeout=5.0)
             return await peer_session.run(
                 peer_reader,
                 peer_writer,
@@ -361,15 +350,11 @@ async def test_unknown_peer_fingerprint_is_rejected(tmp_path: Path) -> None:
         assert any(isinstance(r, PeerAuthError) for r in results)
     finally:
         if dialer_endpoint is not None:
-            try:
+            with contextlib.suppress(Exception):
                 dialer_endpoint.transport.close()
-            except Exception:
-                pass
         if listener_endpoint is not None:
-            try:
+            with contextlib.suppress(Exception):
                 listener_endpoint.transport.close()
-            except Exception:
-                pass
         dialer_sock.close()
         listener_sock.close()
 
@@ -382,4 +367,4 @@ async def test_backup_direction_violation_still_fires(tmp_path: Path) -> None:
     session = BackupSession.as_peer()
     with pytest.raises(DirectionViolationError):
         # The writer/files are irrelevant; the violation is raised before any I/O.
-        await session.send_files(None, files=(tmp_path / "x",))  # type: ignore[arg-type]
+        await session.send_files(None, None, files=(tmp_path / "x",), root=tmp_path)  # type: ignore[arg-type]

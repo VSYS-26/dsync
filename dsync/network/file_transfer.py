@@ -21,6 +21,8 @@ from dsync.network.quic_core import MsgType, async_recv_msg, async_send_msg
 
 logger = logging.getLogger(__name__)
 
+logger = logging.getLogger(__name__)
+
 DEFAULT_CHUNK_SIZE = 64 * 1024
 MAX_META_SIZE = 8 * 1024
 MAX_CHUNK_SIZE = DEFAULT_CHUNK_SIZE

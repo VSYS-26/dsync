@@ -9,6 +9,7 @@ isolation with a stub handler. The daemon-side integration test in
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from typing import TYPE_CHECKING
 
 import pytest
@@ -72,7 +73,7 @@ async def test_discover_via_pointer_file(tmp_path: Path) -> None:
 
 
 async def test_discover_no_daemon_raises(tmp_path: Path) -> None:
-    """discover errors clearly when the pointer file is missing."""
+    """Discover errors clearly when the pointer file is missing."""
     with pytest.raises(FileNotFoundError, match="pointer file missing"):
         LocalControlClient.discover(ipc_dir=tmp_path)
 
@@ -88,7 +89,8 @@ async def test_handler_exception_returns_error_response(tmp_path: Path) -> None:
         client = LocalControlClient(socket_path=server.socket_path)
         response = await client.request(SyncFolderRequest(folder_id="x", peer_id="y"))
         assert response.status == "error"
-        assert response.reason is not None and "relay unreachable" in response.reason
+        assert response.reason is not None
+        assert "relay unreachable" in response.reason
     finally:
         await server.close()
 
@@ -116,10 +118,8 @@ async def test_oversized_frame_rejected(tmp_path: Path) -> None:
         assert payload["status"] == "error"
         assert "too large" in (payload["reason"] or "")
         writer.close()
-        try:
+        with contextlib.suppress(Exception):
             await writer.wait_closed()
-        except Exception:
-            pass
     finally:
         await server.close()
 

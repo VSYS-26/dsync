@@ -6,8 +6,8 @@ import typer
 
 from .add import add
 from .list import list
-from .rm import rm
 from .mod import mod
+from .rm import rm
 
 app: typer.Typer = typer.Typer(help="Folder management commands", no_args_is_help=True)
 

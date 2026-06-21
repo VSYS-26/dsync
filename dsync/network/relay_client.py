@@ -12,7 +12,6 @@ import logging
 from typing import TYPE_CHECKING
 
 from aioquic.asyncio import connect
-from aioquic.quic.connection import QuicConnection
 
 from dsync.network.errors import RelayAuthError, RelayError, RelayProtocolError
 from dsync.network.peer_auth import (
@@ -37,6 +36,8 @@ from dsync.network.relay_protocol import (
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    from aioquic.quic.connection import QuicConnection
 
 logger = logging.getLogger(__name__)
 
@@ -147,6 +148,5 @@ def _verify_relay_cert(connection: QuicConnection, expected_fingerprint: str) ->
     actual_fingerprint = fingerprint_from_spki(spki)
     if actual_fingerprint != expected_fingerprint:
         raise RelayAuthError(
-            f"relay fingerprint mismatch: expected {expected_fingerprint}, "
-            f"got {actual_fingerprint}"
+            f"relay fingerprint mismatch: expected {expected_fingerprint}, got {actual_fingerprint}"
         )

@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Annotated
+# Path is needed at runtime: typer resolves the annotation at registration.
+from pathlib import Path  # noqa: TC003
+from typing import TYPE_CHECKING, Annotated
 
+from pydantic import ValidationError
 import typer
 
 from dsync.cli.console import error, success
+from dsync.cli.daemon_ops import refresh_server_daemon
 from dsync.config import FolderEntry, SyncMode
-from dsync.state import AppState
+
+if TYPE_CHECKING:
+    from dsync.state import AppState
 
 
 def add(
@@ -23,6 +28,13 @@ def add(
             "--device",
             "-d",
             help="Trusted device ids (repeatable). If omitted, the field stays absent in YAML.",
+        ),
+    ] = None,
+    interval: Annotated[
+        str | None,
+        typer.Option(
+            "--interval",
+            help="Cron expression for automatic sync, e.g. '*/30 * * * *'. Omit for manual only.",
         ),
     ] = None,
 ) -> None:
@@ -41,25 +53,25 @@ def add(
             error(f"Unknown trusted device id(s): {', '.join(unknown)}")
             raise typer.Exit(code=1)
 
-    state.folders.entries.append(
-        FolderEntry(
-            id=id,
-            path=path,
-            mode=mode,
-            devices=devices,
-        )
-    )
+    try:
+        entry = FolderEntry(id=id, path=path, mode=mode, devices=devices, interval=interval)
+    except ValidationError as exc:
+        error(f"Invalid folder configuration: {exc}")
+        raise typer.Exit(code=1) from exc
 
+    state.folders.entries.append(entry)
     state.folders.save(state.config_dir, overwrite=True)
-    e = list(filter(lambda f: f.id == id, state.folders.entries))[0]
+    refresh_server_daemon(state)
+
     lines = [
         "Added folder:",
-        f"    • {e.id}",
-        f"      path:    {e.path}",
-        f"      mode:    {e.mode.value}",
+        f"    • {entry.id}",
+        f"      path:    {entry.path}",
+        f"      mode:    {entry.mode.value}",
     ]
-
-    if e.devices is not None:
-        lines.append(f"      devices: {', '.join(e.devices)}")
+    if entry.devices is not None:
+        lines.append(f"      devices: {', '.join(entry.devices)}")
+    if entry.interval is not None:
+        lines.append(f"      interval: {entry.interval}")
 
     success("\n".join(lines))

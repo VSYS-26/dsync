@@ -2,20 +2,18 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import typer
 
 from dsync.cli.console import error, success
-from dsync.config import FolderEntry, SyncMode
-from dsync.state import AppState
+from dsync.cli.daemon_ops import refresh_server_daemon
+
+if TYPE_CHECKING:
+    from dsync.state import AppState
 
 
-def rm(
-    ctx: typer.Context,
-    id: Annotated[str, typer.Argument(help="Unique folder id")]
-) -> None:
+def rm(ctx: typer.Context, id: Annotated[str, typer.Argument(help="Unique folder id")]) -> None:
     """Remove a configured folder.."""
     state: AppState = ctx.obj
 
@@ -29,6 +27,8 @@ def rm(
     state.folders.entries.remove(e)
 
     state.folders.save(state.config_dir, overwrite=True)
+    refresh_server_daemon(state)
+
     lines = [
         "Removed folder:",
         f"    • {e.id}",
@@ -40,4 +40,3 @@ def rm(
         lines.append(f"      devices: {', '.join(e.devices)}")
 
     success("\n".join(lines))
-

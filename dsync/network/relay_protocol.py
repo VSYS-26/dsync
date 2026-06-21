@@ -22,15 +22,17 @@ AUTH frame.
 
 from __future__ import annotations
 
-import asyncio
 import json
-from typing import Final, Literal
+from typing import TYPE_CHECKING, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from dsync.network.errors import RelayProtocolError
 from dsync.network.peer_auth import AUTH_PAYLOAD_SIZE
 from dsync.network.quic_core import MsgType
+
+if TYPE_CHECKING:
+    import asyncio
 
 #: Hard cap on a JSON-encoded control message body. Generous: even a 64-char
 #: fingerprint + endpoint info fits comfortably under a kilobyte.
@@ -87,9 +89,7 @@ class ErrorMessage(BaseModel):
 async def send_auth(writer: asyncio.StreamWriter, payload: bytes) -> None:
     """Write an AUTH frame (1 type byte + 550-byte payload) and EOF the stream."""
     if len(payload) != AUTH_PAYLOAD_SIZE:
-        raise RelayProtocolError(
-            f"AUTH payload must be {AUTH_PAYLOAD_SIZE} B, got {len(payload)}"
-        )
+        raise RelayProtocolError(f"AUTH payload must be {AUTH_PAYLOAD_SIZE} B, got {len(payload)}")
     writer.write(bytes([MsgType.AUTH]) + payload)
     writer.write_eof()
     await writer.drain()
@@ -99,15 +99,11 @@ async def recv_auth(reader: asyncio.StreamReader) -> bytes:
     """Read an AUTH frame and return the raw SPKI||sig payload."""
     type_byte = await reader.readexactly(1)
     if type_byte[0] != MsgType.AUTH:
-        raise RelayProtocolError(
-            f"Expected AUTH (type {MsgType.AUTH}), got type {type_byte[0]}"
-        )
+        raise RelayProtocolError(f"Expected AUTH (type {MsgType.AUTH}), got type {type_byte[0]}")
     payload = await reader.readexactly(AUTH_PAYLOAD_SIZE)
     trailing = await reader.read()
     if trailing:
-        raise RelayProtocolError(
-            f"AUTH stream had {len(trailing)} unexpected trailing bytes"
-        )
+        raise RelayProtocolError(f"AUTH stream had {len(trailing)} unexpected trailing bytes")
     return payload
 
 
@@ -192,6 +188,4 @@ def _parse[T: BaseModel](model_cls: type[T], body: bytes) -> T:
     try:
         return model_cls.model_validate(json.loads(body.decode("utf-8")))
     except Exception as exc:
-        raise RelayProtocolError(
-            f"Malformed {model_cls.__name__} payload: {exc}"
-        ) from exc
+        raise RelayProtocolError(f"Malformed {model_cls.__name__} payload: {exc}") from exc

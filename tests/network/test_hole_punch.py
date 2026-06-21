@@ -174,5 +174,3 @@ async def test_dialer_gives_up_after_max_attempts(
             )
     finally:
         sock.close()
-
-

@@ -30,8 +30,8 @@ from __future__ import annotations
 import argparse
 import datetime
 import hashlib
-import sys
 from pathlib import Path
+import sys
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -79,13 +79,19 @@ def build_smoke(root: Path, *, relay_port: int) -> dict[str, object]:
     certs.mkdir(exist_ok=True)
 
     relay_fp = _write_self_signed(
-        certs / "relay-cert.pem", certs / "relay-key.pem", cn="dsync-smoke-relay",
+        certs / "relay-cert.pem",
+        certs / "relay-key.pem",
+        cn="dsync-smoke-relay",
     )
     peer_a_fp = _write_self_signed(
-        certs / "peer-a-cert.pem", certs / "peer-a-key.pem", cn="dsync-smoke-peer-a",
+        certs / "peer-a-cert.pem",
+        certs / "peer-a-key.pem",
+        cn="dsync-smoke-peer-a",
     )
     peer_b_fp = _write_self_signed(
-        certs / "peer-b-cert.pem", certs / "peer-b-key.pem", cn="dsync-smoke-peer-b",
+        certs / "peer-b-cert.pem",
+        certs / "peer-b-key.pem",
+        cn="dsync-smoke-peer-b",
     )
 
     # ---------- peer-A ----------
@@ -171,7 +177,7 @@ def main() -> int:
         "root",
         type=Path,
         nargs="?",
-        default=Path("/tmp/dsync-smoke"),  # noqa: S108
+        default=Path("/tmp/dsync-smoke"),
         help="Directory to lay out the smoke fixtures in (default: /tmp/dsync-smoke).",
     )
     parser.add_argument(
@@ -212,7 +218,7 @@ def main() -> int:
     print(
         f"  cd {Path.cwd()}\n"
         f"  export XDG_RUNTIME_DIR={root}/runtime-a\n"
-        f"  mkdir -p \"$XDG_RUNTIME_DIR\"\n"
+        f'  mkdir -p "$XDG_RUNTIME_DIR"\n'
         f"  {py} -m dsync.main \\\n"
         f"      -c {root}/peer-a/dsync-config \\\n"
         f"      relay connect relay-test \\\n"
@@ -228,7 +234,7 @@ def main() -> int:
     print(
         f"  cd {Path.cwd()}\n"
         f"  export XDG_RUNTIME_DIR={root}/runtime-b\n"
-        f"  mkdir -p \"$XDG_RUNTIME_DIR\"\n"
+        f'  mkdir -p "$XDG_RUNTIME_DIR"\n'
         f"  {py} -m dsync.main \\\n"
         f"      -c {root}/peer-b/dsync-config \\\n"
         f"      relay connect relay-test \\\n"

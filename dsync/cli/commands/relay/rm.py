@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import typer
 
 from dsync.cli.console import error, success, warn
-from dsync.state import AppState
+
+if TYPE_CHECKING:
+    from dsync.state import AppState
 
 
 def rm(

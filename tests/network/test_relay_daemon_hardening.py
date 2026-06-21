@@ -102,7 +102,10 @@ async def test_daemon_reconnects_after_server_side_close(tmp_path: Path) -> None
     relay_key = tmp_path / "relay-key.pem"
     relay_fp = _write_self_signed(relay_cert, relay_key)
     relay_quic = RelayQuicServer(
-        host="127.0.0.1", port=0, cert_path=relay_cert, key_path=relay_key,
+        host="127.0.0.1",
+        port=0,
+        cert_path=relay_cert,
+        key_path=relay_key,
     )
     await relay_quic.start()
     relay_entry = RelayServer(
@@ -155,7 +158,10 @@ async def test_sync_folder_rejected_while_disconnected(tmp_path: Path) -> None:
     relay_key = tmp_path / "relay-key.pem"
     relay_fp = _write_self_signed(relay_cert, relay_key)
     relay_quic = RelayQuicServer(
-        host="127.0.0.1", port=0, cert_path=relay_cert, key_path=relay_key,
+        host="127.0.0.1",
+        port=0,
+        cert_path=relay_cert,
+        key_path=relay_key,
     )
     await relay_quic.start()
     relay_entry = RelayServer(
@@ -206,8 +212,7 @@ async def test_keepalive_fires_periodically(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """With a small KEEPALIVE_INTERVAL, multiple CONTROL_PING streams arrive at the relay."""
-    from dsync.network import relay_daemon as rd
-    from dsync.network import relay_server as rs
+    from dsync.network import relay_daemon as rd, relay_server as rs
     from dsync.network.quic_core import MsgType
 
     # Run the keepalive loop on a tight cadence so the test stays snappy.
@@ -216,7 +221,7 @@ async def test_keepalive_fires_periodically(
 
     # Count CONTROL_PING streams reaching the relay by wrapping its handler.
     ping_count = 0
-    original_run_stream = rs.RelayServer._run_stream  # noqa: SLF001
+    original_run_stream = rs.RelayServer._run_stream
 
     async def counting_run_stream(self, reader, writer):
         nonlocal ping_count
@@ -255,7 +260,10 @@ async def test_keepalive_fires_periodically(
     relay_key = tmp_path / "relay-key.pem"
     relay_fp = _write_self_signed(relay_cert, relay_key)
     relay_quic = rs.RelayServer(
-        host="127.0.0.1", port=0, cert_path=relay_cert, key_path=relay_key,
+        host="127.0.0.1",
+        port=0,
+        cert_path=relay_cert,
+        key_path=relay_key,
     )
     await relay_quic.start()
     relay_entry = RelayServer(

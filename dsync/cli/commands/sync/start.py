@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from dsync.state import AppState
 
 
-def _get_own_fingerprint(cert_path: str, key_path: str) -> str | None:  # noqa: ARG001
+def _get_own_fingerprint(_cert_path: str, key_path: str) -> str | None:
     """Extract fingerprint from the TLS certificate (matches devices.yaml)."""
     try:
         from pathlib import Path

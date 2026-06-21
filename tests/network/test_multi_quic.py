@@ -14,11 +14,11 @@ import asyncio
 import datetime
 from typing import TYPE_CHECKING
 
-import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
+import pytest
 
 from dsync.network.multi_quic import MultiQuicEndpoint
 from dsync.network.quic_core import build_quic_configuration

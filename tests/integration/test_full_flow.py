@@ -21,7 +21,6 @@ import hashlib
 import os
 from typing import TYPE_CHECKING
 
-import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -31,8 +30,8 @@ from dsync.config import (
     DevicesConfig,
     FolderEntry,
     FoldersConfig,
-    RelayServer,
     RelaysConfig,
+    RelayServer,
     SyncMode,
     TrustedDevice,
 )
@@ -85,8 +84,7 @@ def _build_state(
         folders=FoldersConfig(entries=[folder] if folder is not None else []),
         devices=DevicesConfig(
             trusted_devices=[
-                TrustedDevice(id=pid, fingerprint=fp, relay_id=rid)
-                for pid, fp, rid in trusted
+                TrustedDevice(id=pid, fingerprint=fp, relay_id=rid) for pid, fp, rid in trusted
             ],
         ),
         relays=RelaysConfig(relays=[relay]),
@@ -210,11 +208,17 @@ async def test_sync_to_unknown_peer_returns_error(tmp_path: Path) -> None:
     relay_key = tmp_path / "relay-key.pem"
     relay_fp = _write_self_signed(relay_cert, relay_key)
     relay_quic = RelayQuicServer(
-        host="127.0.0.1", port=0, cert_path=relay_cert, key_path=relay_key,
+        host="127.0.0.1",
+        port=0,
+        cert_path=relay_cert,
+        key_path=relay_key,
     )
     await relay_quic.start()
     relay_entry = RelayServer(
-        id="relay-test", host="127.0.0.1", port=relay_quic.bound_port, fingerprint=relay_fp,
+        id="relay-test",
+        host="127.0.0.1",
+        port=relay_quic.bound_port,
+        fingerprint=relay_fp,
     )
 
     a_cert = tmp_path / "a-cert.pem"

@@ -18,7 +18,6 @@ import hashlib
 import os
 from typing import TYPE_CHECKING
 
-import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -28,8 +27,8 @@ from dsync.config import (
     DevicesConfig,
     FolderEntry,
     FoldersConfig,
-    RelayServer,
     RelaysConfig,
+    RelayServer,
     SyncMode,
     TrustedDevice,
 )
@@ -41,6 +40,8 @@ from dsync.state import AppState
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    import pytest
 
 
 def _write_self_signed(cert_path: Path, key_path: Path) -> str:
@@ -83,8 +84,7 @@ def _build_state(
         folders=FoldersConfig(entries=[folder] if folder is not None else []),
         devices=DevicesConfig(
             trusted_devices=[
-                TrustedDevice(id=pid, fingerprint=fp, relay_id=rid)
-                for pid, fp, rid in trusted
+                TrustedDevice(id=pid, fingerprint=fp, relay_id=rid) for pid, fp, rid in trusted
             ],
         ),
         relays=RelaysConfig(relays=[relay]),
@@ -101,35 +101,52 @@ async def test_burst_fires_on_both_sides_before_quic_handshake(
     relay_key = tmp_path / "relay-key.pem"
     relay_fp = _write_self_signed(relay_cert, relay_key)
     relay_quic = RelayQuicServer(
-        host="127.0.0.1", port=0, cert_path=relay_cert, key_path=relay_key,
+        host="127.0.0.1",
+        port=0,
+        cert_path=relay_cert,
+        key_path=relay_key,
     )
     await relay_quic.start()
     relay_entry = RelayServer(
-        id="relay-test", host="127.0.0.1", port=relay_quic.bound_port,
+        id="relay-test",
+        host="127.0.0.1",
+        port=relay_quic.bound_port,
         fingerprint=relay_fp,
     )
 
     # ----- peers + folder + state -----
-    a_cert = tmp_path / "a-cert.pem"; a_key = tmp_path / "a-key.pem"
+    a_cert = tmp_path / "a-cert.pem"
+    a_key = tmp_path / "a-key.pem"
     a_fp = _write_self_signed(a_cert, a_key)
-    a_folder_path = tmp_path / "a-folder"; a_folder_path.mkdir()
+    a_folder_path = tmp_path / "a-folder"
+    a_folder_path.mkdir()
     (a_folder_path / "demo.bin").write_bytes(b"x" * 1024)
-    a_recv = tmp_path / "a-recv"; a_recv.mkdir()
+    a_recv = tmp_path / "a-recv"
+    a_recv.mkdir()
     a_folder = FolderEntry(
-        id="demo", path=a_folder_path, mode=SyncMode.BACKUP_TO_PEER,
-        devices=["peer-b"], recursive=False,
+        id="demo",
+        path=a_folder_path,
+        mode=SyncMode.BACKUP_TO_PEER,
+        devices=["peer-b"],
+        recursive=False,
     )
 
-    b_cert = tmp_path / "b-cert.pem"; b_key = tmp_path / "b-key.pem"
+    b_cert = tmp_path / "b-cert.pem"
+    b_key = tmp_path / "b-key.pem"
     b_fp = _write_self_signed(b_cert, b_key)
-    b_recv = tmp_path / "b-recv"; b_recv.mkdir()
+    b_recv = tmp_path / "b-recv"
+    b_recv.mkdir()
 
     a_state = _build_state(
-        config_dir=tmp_path, relay=relay_entry, folder=a_folder,
+        config_dir=tmp_path,
+        relay=relay_entry,
+        folder=a_folder,
         trusted=[("peer-b", b_fp, "relay-test")],
     )
     b_state = _build_state(
-        config_dir=tmp_path, relay=relay_entry, folder=None,
+        config_dir=tmp_path,
+        relay=relay_entry,
+        folder=None,
         trusted=[("peer-a", a_fp, "relay-test")],
     )
 
@@ -164,14 +181,23 @@ async def test_burst_fires_on_both_sides_before_quic_handshake(
     monkeypatch.setattr(multi_quic.MultiQuicEndpoint, "send_datagram", instrumented_send)
 
     # ----- daemons -----
-    ipc_dir = tmp_path / "ipc"; ipc_dir.mkdir()
+    ipc_dir = tmp_path / "ipc"
+    ipc_dir.mkdir()
     daemon_a = RelayDaemon(
-        relay=relay_entry, cert_path=a_cert, key_path=a_key, state=a_state,
-        recv_dir=a_recv, ipc_socket_path=ipc_dir / f"a-{os.getpid()}.sock",
+        relay=relay_entry,
+        cert_path=a_cert,
+        key_path=a_key,
+        state=a_state,
+        recv_dir=a_recv,
+        ipc_socket_path=ipc_dir / f"a-{os.getpid()}.sock",
     )
     daemon_b = RelayDaemon(
-        relay=relay_entry, cert_path=b_cert, key_path=b_key, state=b_state,
-        recv_dir=b_recv, ipc_socket_path=ipc_dir / f"b-{os.getpid()}.sock",
+        relay=relay_entry,
+        cert_path=b_cert,
+        key_path=b_key,
+        state=b_state,
+        recv_dir=b_recv,
+        ipc_socket_path=ipc_dir / f"b-{os.getpid()}.sock",
     )
     daemon_a_ref.append(daemon_a)
     daemon_b_ref.append(daemon_b)
@@ -197,7 +223,8 @@ async def test_burst_fires_on_both_sides_before_quic_handshake(
         assert b_punch_count >= 5, f"listener burst count = {b_punch_count}"
         # Bursts should have fired within a tight window of each other —
         # the relay sends PUNCH_INFO to both nearly simultaneously.
-        assert a_first_punch_at is not None and b_first_punch_at is not None
+        assert a_first_punch_at is not None
+        assert b_first_punch_at is not None
         delta = abs(a_first_punch_at - b_first_punch_at)
         assert delta < 1.0, (
             f"burst start skew {delta:.3f}s exceeds 1.0s; relay PUNCH_INFO "

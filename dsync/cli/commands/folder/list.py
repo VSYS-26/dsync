@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import typer
+import typer  # noqa: TC002
 
 from dsync.cli.console import success
 
@@ -21,5 +21,7 @@ def list(ctx: typer.Context) -> None:
         lines.append(f"      path:    {e.path}")
         lines.append(f"      mode:    {e.mode.value}")
         lines.append(f"      devices: {', '.join(e.devices)}")
+        if e.interval is not None:
+            lines.append(f"      interval: {e.interval}")
 
     success("\n".join(lines))

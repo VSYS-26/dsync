@@ -10,7 +10,7 @@ import yaml
 
 from dsync.config.folder import FoldersConfig, SyncMode
 from dsync.network.errors import ConfigConflictError
-from dsync.network.quic_core import (
+from dsync.network.p2p_core import (
     async_recv_config,
     async_recv_config_ack,
     async_send_config,

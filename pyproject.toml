@@ -1,3 +1,7 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "dsync"
 version = "0.1.0"
@@ -6,22 +10,31 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "aioquic>=1.2.0",
+    "croniter>=3.0",
     "cryptography>=47.0.0",
-    "pre-commit>=4.5.1",
+    "pyp2p>=0.8.3",
     "pydantic>=2.10",
     "pyyaml>=6.0.2",
     "rich>=15.0.0",
-    "ruff>=0.6.0",
     "typer>=0.24.1",
     "keyring>=25.7.0",
     "keyrings-alt>=5.0.2",
+    "pywin32>=306 ; sys_platform == 'win32'",
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=8",
     "pytest-asyncio>=0.24",
+    "pre-commit>=4.5.1",
+    "ruff>=0.6.0",
+    "mypy>=1.13",
+    "bandit>=1.8",
+    "pyinstaller>=6.11",
 ]
+
+[project.scripts]
+dsync = "dsync.main:main"
 
 [tool.ruff]
 line-length = 100
@@ -65,8 +78,21 @@ ignore = [
     "TRY003",
     "EM101",
     "EM102",
+    "A001",
+    "A002",
+    "A004",
 ]
+
 task-tags = ["TODO", "FIXME"]
+
+[tool.ruff.lint.per-file-ignores]
+"dsync/generate_test_certs.py" = ["PTH100", "PTH118", "PTH120", "E402"]
+"dsync/network/relay_client.py" = ["TRY301", "TRY004"]
+"dsync/network/relay_daemon.py" = ["RUF003"]
+"dsync/network/relay_protocol.py" = ["RUF003"]
+"dsync/network/peer_auth.py" = ["TRY004"]
+"scripts/smoke_setup.py" = ["D103"]
+"tests/**" = ["ARG001", "D103", "D205", "F821", "RUF003"]
 
 [tool.ruff.lint.isort]
 force-sort-within-sections = true
@@ -109,12 +135,18 @@ mypy_path = ["stubs"]
 [[tool.mypy.overrides]]
 module = [
     "aioquic.*",
+    "croniter.*",
     "cryptography.*",
     "rich.*",
     "typer.*",
     "keyring.*",
+    "win32service",
 ]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["tests.*", "scripts.*", "dsync.generate_test_certs"]
+ignore_errors = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -122,4 +154,4 @@ asyncio_mode = "auto"
 
 [tool.bandit]
 exclude_dirs = ["tests", ".venv"]
-skips = ["B101"]
+skips = ["B101", "B108", "B404", "B603", "B607", "B110"]

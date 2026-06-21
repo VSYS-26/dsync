@@ -28,6 +28,36 @@ Work in progress - early proof-of-concept stage.
 
 ---
 
+## Install (prebuilt binary)
+
+No Python needed. Each release ships one self-contained bundle per OS on the
+GitHub Releases page:
+
+- Linux: `dsync-linux-x64.tar.gz`
+- macOS: `dsync-macos-arm64.tar.gz`
+- Windows: `dsync-windows-x64.zip`
+
+### Linux / macOS
+
+Install the bundle to a system path, outside your home directory:
+
+```bash
+tar -xzf dsync-linux-x64.tar.gz
+sudo mv dsync /opt/dsync
+sudo ln -s /opt/dsync/dsync /usr/local/bin/dsync
+sudo chcon -R -t bin_t /opt/dsync        # Fedora only
+dsync --help
+```
+
+Then enable the service: `dsync server enable`.
+
+### Windows
+
+Unzip `dsync-windows-x64.zip` and run `dsync\dsync.exe`. The first launch may
+show a SmartScreen warning because the binary is not code-signed.
+
+---
+
 ## Development Setup
 
 This project uses [uv](https://docs.astral.sh/uv/) for fast Python dependency management and virtual environments.
@@ -42,6 +72,14 @@ This project uses [uv](https://docs.astral.sh/uv/) for fast Python dependency ma
 2. Sync the project (this automatically creates a virtual environment in `.venv/` and installs all required dependencies):
    ```bash
    uv sync
+   ```
+
+   `uv sync` also installs the `dev` dependency group (ruff, pre-commit, mypy,
+   bandit, PyInstaller) into `.venv/`, since uv installs `dev` by default. That
+   is the dev toolchain, not a runtime dependency. For a runtime-only
+   environment, use:
+   ```bash
+   uv sync --no-dev
    ```
 
 ### UV commands
