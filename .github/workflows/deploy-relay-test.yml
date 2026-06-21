@@ -1,9 +1,6 @@
-name: Deploy Relay Server - Test Environment
+name: Deploy Relay Server - Test Environment (manual)
 
 on:
-  workflow_run:
-    workflows: ["Relay Server - Build & Push Docker Image"]
-    types: [completed]
   workflow_dispatch:
     inputs:
       image_tag:
@@ -20,20 +17,8 @@ jobs:
     name: SSH deploy to test server
     runs-on: ubuntu-latest
     environment: test-relay
-    if: >
-      github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
 
     steps:
-      - name: Resolve image tag
-        id: tag
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "tag=${{ github.event.inputs.image_tag }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=dev-latest" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Deploy
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -44,7 +29,7 @@ jobs:
             set -e
 
             IMAGE="${{ env.IMAGE }}"
-            TAG="${{ steps.tag.outputs.tag }}"
+            TAG="${{ github.event.inputs.image_tag }}"
             RELAY_DIR="${{ env.RELAY_DIR }}"
 
             mkdir -p "$RELAY_DIR"
@@ -59,7 +44,6 @@ jobs:
               echo "[deploy] Generated new TLS cert/key."
             fi
 
-            # Log in to GHCR (uses the same token the build workflow used).
             echo "${{ secrets.TEST_RELAY_GHCR_TOKEN }}" \
               | docker login ghcr.io -u "${{ secrets.TEST_RELAY_GHCR_USER }}" --password-stdin
 
@@ -80,7 +64,6 @@ jobs:
 
             echo ""
             echo "=== Relay fingerprint (share with peers) ==="
-            # SPKI-SHA256 fingerprint, matches dsync's RelayServer.fingerprint
             openssl x509 -in "$RELAY_DIR/cert.pem" -pubkey -noout \
               | openssl pkey -pubin -outform DER \
               | openssl dgst -sha256 \
