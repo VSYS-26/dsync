@@ -1,12 +1,9 @@
 name: Deploy Relay Server - Test Environment
 
 on:
-  push:
-#   branches: [main, dev]
   workflow_run:
     workflows: ["Relay Server - Build & Push Docker Image"]
     types: [completed]
-#    branches: [main, dev]
   workflow_dispatch:
     inputs:
       image_tag:
@@ -23,11 +20,9 @@ jobs:
     name: SSH deploy to test server
     runs-on: ubuntu-latest
     environment: test-relay
-    # For workflow_run: only proceed if the build succeeded.
-    # For workflow_dispatch: always run.
-#    if: >
-#      github.event_name == 'workflow_dispatch' ||
-#      github.event.workflow_run.conclusion == 'success'
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
 
     steps:
       - name: Resolve image tag
