@@ -1,11 +1,19 @@
-FROM python:3.13-slim
+FROM python:3.13-slim AS builder
 
 WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends gcc && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml README.md ./
 COPY dsync/ dsync/
 
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir --prefix=/install .
+
+FROM python:3.13-slim
+
+WORKDIR /app
+
+COPY --from=builder /install /usr/local
 
 EXPOSE 9000/udp
 
