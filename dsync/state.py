@@ -52,7 +52,7 @@ class AppState:
 
         relay_ids = {r.id for r in relays.relays}
         for device in devices.trusted_devices:
-            if device.relay_id not in relay_ids:
+            if device.relay_id is not None and device.relay_id not in relay_ids:
                 raise ValueError(
                     f"Device {device.id} references relay_id '{device.relay_id}' "
                     "which is not listed in relays.yaml"

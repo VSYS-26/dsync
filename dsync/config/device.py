@@ -13,7 +13,7 @@ class TrustedDevice(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     id: str = Field(min_length=1)
     fingerprint: str = Field(min_length=1)
-    relay_id: str = Field(min_length=1)
+    relay_id: str | None = None
 
 
 class DevicesConfig(YamlFileConfig):

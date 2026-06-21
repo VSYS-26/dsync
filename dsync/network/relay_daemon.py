@@ -517,7 +517,7 @@ class RelayDaemon:
         )
         if device is None:
             return {"status": "error", "reason": f"unknown peer id {request.peer_id!r}"}
-        if device.relay_id != self._relay.id:
+        if device.relay_id is not None and device.relay_id != self._relay.id:
             return {
                 "status": "error",
                 "reason": (
