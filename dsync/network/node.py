@@ -180,7 +180,7 @@ class P2PNode:
     def _verify_peer_signature(
         public_key: RSAPublicKey, channel_binding: bytes, signature: bytes
     ) -> None:
-        """Raise ValueError if signature does not verify against channel_binding."""
+        """Raise PeerAuthError if signature does not verify against channel_binding."""
         try:
             public_key.verify(
                 signature,
@@ -192,7 +192,7 @@ class P2PNode:
                 hashes.SHA256(),
             )
         except Exception as exc:
-            raise ValueError(f"Peer signature invalid: {exc}") from exc
+            raise PeerAuthError(f"Peer signature invalid: {exc}") from exc
 
     @staticmethod
     def _pack_auth_msg(spki: bytes, signature: bytes) -> bytes:
