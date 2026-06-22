@@ -9,3 +9,4 @@ Hier sind die Projektkonventionen und Arbeitsregeln dokumentiert.
 - [Setup](setup.md)
 - [Installation](installation.md)
 - [Daemons](daemon.md)
+- [Tests](testing.md)

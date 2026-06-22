@@ -134,7 +134,7 @@ def get_tls_channel_binding(writer: asyncio.StreamWriter) -> bytes:
         raise RuntimeError("No SSL object on writer — connection is not TLS")
     if hasattr(ssl_object, "export_keying_material"):
         return cast(
-            bytes, ssl_object.export_keying_material("dsync-peer-auth-v1", 32, context=None)
+            "bytes", ssl_object.export_keying_material("dsync-peer-auth-v1", 32, context=None)
         )
     binding = ssl_object.get_channel_binding("tls-unique")
     if binding is None:

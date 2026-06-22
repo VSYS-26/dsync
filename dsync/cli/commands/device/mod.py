@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Annotated
 
 import typer
 
 from dsync.cli.console import error, success
-from dsync.config import SyncMode
-from dsync.state import AppState
 from dsync.crypto import is_valid_fingerprint
+from dsync.state import AppState
 
 
 def mod(
@@ -26,21 +24,26 @@ def mod(
         error(f"Device with id '{id}' does not exist")
         raise typer.Exit(code=1)
 
-    if any(entry.fingerprint == fingerprint and entry.id != id for entry in state.devices.trusted_devices):
+    if any(
+        entry.fingerprint == fingerprint and entry.id != id
+        for entry in state.devices.trusted_devices
+    ):
         error(f"Device with fingerprint '{fingerprint}' already exists")
         raise typer.Exit(code=1)
 
     if not is_valid_fingerprint(fingerprint):
-        error(f"Fingerprint does not match expected format")
+        error("Fingerprint does not match expected format")
         raise typer.Exit(code=1)
 
     updated = current.model_copy(
         update={
-            **({"fingerprint": fingerprint}),
+            "fingerprint": fingerprint,
         }
     )
 
-    state.devices.trusted_devices = [updated if entry.id == id else entry for entry in state.devices.trusted_devices]
+    state.devices.trusted_devices = [
+        updated if entry.id == id else entry for entry in state.devices.trusted_devices
+    ]
 
     state.devices.save(state.config_dir, overwrite=True)
     lines = [

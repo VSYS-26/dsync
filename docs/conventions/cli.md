@@ -139,4 +139,4 @@ dann schlicht leer. Ein neues Verzeichnis wird erst beim Save angelegt.
 
 ## Tests
 
-#TODO Test-Strategie für CLI-Commands definieren nachdem generelle Teststrategie festgelegt wurde
+CLI-Commands werden mit Typers `CliRunner` getestet. Details zur Teststrategie: [Tests](testing.md#cli-tests).

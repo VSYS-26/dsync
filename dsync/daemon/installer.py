@@ -10,7 +10,7 @@ from abc import ABC, abstractmethod
 import contextlib
 from pathlib import Path
 import platform
-import subprocess
+import subprocess  # nosec B404 - only invokes hardcoded OS service managers below
 
 
 class ServiceInstaller(ABC):
@@ -125,7 +125,9 @@ class SystemdServiceInstaller(ServiceInstaller):
 
     def _run_systemctl(self, *args: str) -> None:
         """Run a systemctl command with sudo."""
-        subprocess.run(["sudo", "systemctl", *args], check=True, capture_output=True)
+        subprocess.run(  # nosec B603 B607 - hardcoded trusted command, no user input
+            ["sudo", "systemctl", *args], check=True, capture_output=True
+        )
 
     def _generate_service_file(self) -> str:
         """Render the systemd unit file."""
@@ -157,7 +159,7 @@ WantedBy=multi-user.target
         try:
             self.service_file.write_text(service_content)
         except PermissionError:
-            subprocess.run(
+            subprocess.run(  # nosec B603 B607 - hardcoded trusted command, no user input
                 ["sudo", "tee", str(self.service_file)],
                 input=service_content.encode(),
                 check=True,
@@ -177,7 +179,9 @@ WantedBy=multi-user.target
             try:
                 self.service_file.unlink()
             except PermissionError:
-                subprocess.run(["sudo", "rm", str(self.service_file)], check=True)
+                subprocess.run(  # nosec B603 B607 - hardcoded trusted command, no user input
+                    ["sudo", "rm", str(self.service_file)], check=True
+                )
         self._run_systemctl("daemon-reload")
 
     def restart(self) -> None:
@@ -187,7 +191,7 @@ WantedBy=multi-user.target
     def is_enabled(self) -> bool:
         """Check via ``systemctl is-enabled``."""
         try:
-            result = subprocess.run(
+            result = subprocess.run(  # nosec B603 B607 - hardcoded trusted command
                 ["systemctl", "is-enabled", f"{self.service_name}.service"],
                 capture_output=True,
                 text=True,
@@ -200,7 +204,7 @@ WantedBy=multi-user.target
     def is_running(self) -> bool:
         """Check via ``systemctl is-active``."""
         try:
-            result = subprocess.run(
+            result = subprocess.run(  # nosec B603 B607 - hardcoded trusted command
                 ["systemctl", "is-active", f"{self.service_name}.service"],
                 capture_output=True,
                 text=True,
@@ -262,13 +266,15 @@ class LaunchdServiceInstaller(ServiceInstaller):
         self.plist_file.parent.mkdir(parents=True, exist_ok=True)
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
         self.plist_file.write_text(self._generate_plist())
-        subprocess.run(["launchctl", "load", str(self.plist_file)], check=True, capture_output=True)
+        subprocess.run(  # nosec B603 B607 - hardcoded trusted command, no user input
+            ["launchctl", "load", str(self.plist_file)], check=True, capture_output=True
+        )
 
     def disable(self) -> None:
         """Unload and remove the agent."""
         if self.plist_file.exists():
             with contextlib.suppress(subprocess.CalledProcessError):
-                subprocess.run(
+                subprocess.run(  # nosec B603 B607 - hardcoded trusted command
                     ["launchctl", "unload", str(self.plist_file)],
                     check=True,
                     capture_output=True,
@@ -282,7 +288,7 @@ class LaunchdServiceInstaller(ServiceInstaller):
     def is_running(self) -> bool:
         """Check via ``launchctl list``."""
         try:
-            result = subprocess.run(
+            result = subprocess.run(  # nosec B603 B607 - hardcoded trusted command
                 ["launchctl", "list", self.label],
                 capture_output=True,
                 text=True,
@@ -340,7 +346,7 @@ class WindowsServiceInstaller(ServiceInstaller):
                 win32service.ControlService(handle, win32service.SERVICE_CONTROL_STOP)
             win32service.DeleteService(handle)
             win32service.CloseServiceHandle(handle)
-        except Exception:
+        except Exception:  # nosec B110 - best-effort cleanup, handle may not exist
             pass
         finally:
             win32service.CloseServiceHandle(sc_mgr)

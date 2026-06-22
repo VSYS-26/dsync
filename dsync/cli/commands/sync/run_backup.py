@@ -7,9 +7,9 @@ import hashlib
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
-import typer
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
+import typer
 
 from dsync.cli.console import error, info, success, warn
 from dsync.config import SyncMode
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from dsync.state import AppState
 
 
-def _get_own_fingerprint(cert_path: str, key_path: str) -> str | None:
+def _get_own_fingerprint(cert_path: str, key_path: str) -> str | None:  # noqa: ARG001
     """Extract fingerprint from the TLS certificate (matches devices.yaml)."""
     try:
         with Path(key_path).open("rb") as f:
@@ -108,7 +108,6 @@ def sync(
         _sync_all_folders(folders_to_sync, peer_map, peer_host, cert, key, state)
     )
 
-
     info(f"\n{'=' * 60}")
     success(f"Completed: {total_syncs} successful sync(s)")
     if failed_syncs > 0:
@@ -171,7 +170,6 @@ async def _sync_all_folders(
                 f"[{idx}/{len(folders_to_sync)}] Folder: {folder.id} - SKIPPED (no devices configured)"
             )
             continue
-
 
         info(f"\n[{idx}/{len(folders_to_sync)}] Folder: {folder.id}")
         info(f"    Path: {folder.path}")

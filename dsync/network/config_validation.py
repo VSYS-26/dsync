@@ -17,7 +17,6 @@ from __future__ import annotations
 from dsync.config import FolderEntry, SyncMode
 from dsync.network.errors import PeerAuthError
 
-
 _COMPLEMENTARY_MODES: dict[SyncMode, SyncMode] = {
     SyncMode.MIRROR: SyncMode.MIRROR,
     SyncMode.BACKUP_TO_PEER: SyncMode.BACKUP_FROM_PEER,
