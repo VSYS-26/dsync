@@ -64,6 +64,10 @@ class Daemon(ABC):
         """Stop and remove this daemon."""
         self._installer().disable()
 
+    def restart(self) -> None:
+        """Restart this daemon so it picks up configuration changes."""
+        self._installer().restart()
+
     def is_enabled(self) -> bool:
         """Return whether this daemon is installed."""
         return self._installer().is_enabled()

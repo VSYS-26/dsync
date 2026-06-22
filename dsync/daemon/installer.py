@@ -59,6 +59,15 @@ class ServiceInstaller(ABC):
     def is_running(self) -> bool:
         """Return whether the service is currently running."""
 
+    def restart(self) -> None:
+        """Restart the service so it picks up configuration changes.
+
+        Default: remove and reinstall. Subclasses may override with a lighter
+        native restart that keeps the installed unit in place.
+        """
+        self.disable()
+        self.enable()
+
     @classmethod
     def get(
         cls,
@@ -170,6 +179,10 @@ WantedBy=multi-user.target
             except PermissionError:
                 subprocess.run(["sudo", "rm", str(self.service_file)], check=True)
         self._run_systemctl("daemon-reload")
+
+    def restart(self) -> None:
+        """Restart via systemctl, keeping the installed unit file in place."""
+        self._run_systemctl("restart", f"{self.service_name}.service")
 
     def is_enabled(self) -> bool:
         """Check via ``systemctl is-enabled``."""

@@ -19,13 +19,19 @@ from cryptography.hazmat.primitives.serialization import (
 from dsync.config import FolderEntry, FoldersConfig
 from dsync.network.config_exchange import ConfigExchange
 from dsync.network.config_validation import validate_peer_folder_config
-from dsync.network.errors import PeerAuthError
+from dsync.network.errors import ConfigConflictError, PeerAuthError
 from dsync.network.file_transfer import (
     recv_folder_and_extract,
     send_path_as_zip,
 )
 from dsync.network.index_exchange import FolderIndex, IndexExchange
 from dsync.network.index_diff import Role, diff_indexes
+from dsync.network.sync_errors import (
+    ErrorCode,
+    PeerReportedError,
+    SyncError,
+    notify_peer,
+)
 from dsync.state import AppState
 
 from .p2p_core import (
@@ -39,6 +45,40 @@ from .p2p_core import (
 
 _SPKI_SIZE = 294  # RSA-2048 SubjectPublicKeyInfo DER
 _SIG_SIZE = 256  # RSA-2048 PSS signature
+
+
+def _classify_local_error(exc: BaseException) -> SyncError | None:
+    """Map a locally raised exception to a :class:`SyncError` worth sending.
+
+    Returns ``None`` if the peer cannot meaningfully act on it (network drop,
+    timeout, internal bug — those collapse into INTERNAL on the receiving side
+    anyway, and at that point our socket is usually gone).
+    """
+    if isinstance(exc, PeerReportedError):
+        # Don't echo a peer's error back at them.
+        return None
+    if isinstance(exc, PeerAuthError):
+        msg = str(exc)
+        if "Unknown device" in msg:
+            return SyncError(code=ErrorCode.UNKNOWN_DEVICE, message=msg)
+        if "path-unsafe" in msg:
+            return SyncError(code=ErrorCode.UNSAFE_PEER_ID, message=msg)
+        if "RSA" in msg:
+            return SyncError(code=ErrorCode.NON_RSA_KEY, message=msg)
+        if "has no entry for it" in msg:
+            return SyncError(code=ErrorCode.FOLDER_NOT_CONFIGURED, message=msg)
+        if "Mode mismatch" in msg or "invalid direction" in msg or "unsupported mode" in msg:
+            return SyncError(code=ErrorCode.MODE_MISMATCH, message=msg)
+        if "Recursive flag mismatch" in msg:
+            return SyncError(code=ErrorCode.RECURSIVE_MISMATCH, message=msg)
+        if "not whitelisted" in msg:
+            return SyncError(code=ErrorCode.DEVICE_NOT_WHITELISTED, message=msg)
+        if "exactly one folder per sync session" in msg:
+            return SyncError(code=ErrorCode.MULTIPLE_FOLDERS, message=msg)
+        return SyncError(code=ErrorCode.BAD_SIGNATURE, message=msg)
+    if isinstance(exc, ConfigConflictError):
+        return None  # Already sent by ConfigExchange before raising.
+    return None
 
 
 class P2PNode:
@@ -142,7 +182,7 @@ class P2PNode:
     def _verify_peer_signature(
         public_key: RSAPublicKey, channel_binding: bytes, signature: bytes
     ) -> None:
-        """Raise ValueError if signature does not verify against channel_binding."""
+        """Raise PeerAuthError if signature does not verify against channel_binding."""
         try:
             public_key.verify(
                 signature,
@@ -154,7 +194,7 @@ class P2PNode:
                 hashes.SHA256(),
             )
         except Exception as exc:
-            raise ValueError(f"Peer signature invalid: {exc}") from exc
+            raise PeerAuthError(f"Peer signature invalid: {exc}") from exc
 
     @staticmethod
     def _pack_auth_msg(spki: bytes, signature: bytes) -> bytes:
@@ -216,6 +256,8 @@ class P2PNode:
                 msg_type, answer = await async_recv_msg(reader)
                 if answer is None:
                     raise PeerAuthError("Client closed connection before handshake reply.")  # noqa: TRY301
+                if msg_type == MsgType.ERROR:
+                    raise PeerReportedError(SyncError.from_yaml(answer))  # noqa: TRY301
                 if msg_type != MsgType.HELLO:
                     raise PeerAuthError(  # noqa: TRY301
                         f"Expected hello (type {MsgType.HELLO}), got type {msg_type}"
@@ -225,6 +267,8 @@ class P2PNode:
                 msg_type, msg = await async_recv_msg(reader)
                 if msg is None:
                     raise PeerAuthError("Server closed connection before handshake greeting.")  # noqa: TRY301
+                if msg_type == MsgType.ERROR:
+                    raise PeerReportedError(SyncError.from_yaml(msg))  # noqa: TRY301
                 if msg_type != MsgType.HELLO:
                     raise PeerAuthError(  # noqa: TRY301
                         f"Expected hello (type {MsgType.HELLO}), got type {msg_type}"
@@ -234,8 +278,16 @@ class P2PNode:
 
             await self.start_sync(reader, writer, peer_id)
 
+        except PeerReportedError as e:
+            # Peer aborted and told us why — show their reason verbatim.
+            print(f"[!] Sync aborted by peer: {e.sync_error.format()}")
         except Exception as e:
-            print(f"[!] Connection error: {e}")
+            sync_err = _classify_local_error(e)
+            if sync_err is not None:
+                await notify_peer(writer, sync_err)
+                print(f"[!] Sync aborted locally: {sync_err.format()}")
+            else:
+                print(f"[!] Connection error: {e}")
         finally:
             writer.close()
             await writer.wait_closed()
@@ -266,7 +318,8 @@ class P2PNode:
 
             if len(peer_config.entries) != 1:
                 raise PeerAuthError(
-                    f"Expected exactly one folder per sync session, got {len(peer_config.entries)}"
+                    f"device '{peer_id}' sent {len(peer_config.entries)} folder entries; "
+                    f"exactly one folder per sync session is required"
                 )
 
             remote_entry = peer_config.entries[0]
@@ -276,9 +329,10 @@ class P2PNode:
             )
             if not local_entry:
                 raise PeerAuthError(
-                    f"Peer wants to sync '{remote_entry.id}' but not configured locally"
+                    f"folder '{remote_entry.id}': device '{peer_id}' wants to sync this "
+                    f"folder but device '{self._own_device_id}' has no entry for it"
                 )
-            validate_peer_folder_config(local_entry, remote_entry, peer_id)
+            validate_peer_folder_config(local_entry, remote_entry, peer_id, self._own_device_id)
 
             print(f"[+] Config validated for folder '{local_entry.id}'")
 
