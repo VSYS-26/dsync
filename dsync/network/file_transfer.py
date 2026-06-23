@@ -8,6 +8,16 @@ from pathlib import Path, PurePosixPath
 import tempfile
 import zipfile
 
+from rich.console import Console
+from rich.progress import (
+    BarColumn,
+    DownloadColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeRemainingColumn,
+    TransferSpeedColumn,
+)
 import yaml
 
 from dsync.config import FolderEntry
@@ -21,9 +31,24 @@ from dsync.network.p2p_core import MsgType, async_recv_msg, async_send_msg
 
 logger = logging.getLogger(__name__)
 
+_progress_console = Console(stderr=True)
+
 DEFAULT_CHUNK_SIZE = 64 * 1024
 MAX_META_SIZE = 8 * 1024
 MAX_CHUNK_SIZE = DEFAULT_CHUNK_SIZE
+
+
+def _transfer_progress() -> Progress:
+    """Build a Rich Progress bar configured for byte-level file transfers."""
+    return Progress(
+        TextColumn("[bold blue]{task.description}"),
+        BarColumn(),
+        DownloadColumn(),
+        TransferSpeedColumn(),
+        TimeRemainingColumn(),
+        console=_progress_console,
+        transient=True,
+    )
 
 
 @dataclass(frozen=True)
@@ -140,9 +165,11 @@ async def send_file(
     meta = FileMeta(path=rel.as_posix(), size=path.stat().st_size, sha256=digest)
     await async_send_msg(writer, MsgType.FILE_META, meta.to_yaml())
 
-    with path.open("rb") as f:
+    with path.open("rb") as f, _transfer_progress() as progress:
+        task_id = progress.add_task(f"Sending {path.name}", total=meta.size)
         while chunk := await asyncio.to_thread(f.read, DEFAULT_CHUNK_SIZE):
             await async_send_msg(writer, MsgType.FILE_CHUNK, chunk)
+            progress.update(task_id, advance=len(chunk))
 
     msg_type, peer_hash_bytes = await async_recv_msg(reader)
     if msg_type is None or peer_hash_bytes is None:
@@ -174,7 +201,8 @@ async def _recv_and_verify_chunks(
     """
     digest = hashlib.sha256()
     received = 0
-    with target.open("wb") as f:
+    with target.open("wb") as f, _transfer_progress() as progress:
+        task_id = progress.add_task(f"Receiving {target.name}", total=meta.size)
         while received < meta.size:
             msg_type, payload = await _recv_frame(reader)
             if msg_type != MsgType.FILE_CHUNK:
@@ -190,6 +218,7 @@ async def _recv_and_verify_chunks(
             await asyncio.to_thread(f.write, payload)
             digest.update(payload)
             received += len(payload)
+            progress.update(task_id, advance=len(payload))
 
     computed_hash = digest.hexdigest()
     if computed_hash != meta.sha256:
@@ -272,7 +301,14 @@ async def send_path_as_zip(
                             if d.is_dir() and not any(d.iterdir()):
                                 zf.writestr(d.relative_to(src).as_posix() + "/", "")
 
-        await asyncio.to_thread(_make_zip)
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[bold blue]{task.description}"),
+            console=_progress_console,
+            transient=True,
+        ) as progress:
+            progress.add_task(f"Packing {src.name}…", total=None)
+            await asyncio.to_thread(_make_zip)
         logger.info(f"[*] packed {src} -> {zip_path.name}")
         await send_file(writer, reader, zip_path, tmpdir_path)
 
@@ -294,5 +330,12 @@ async def recv_folder_and_extract(
             with zipfile.ZipFile(zip_path, "r") as zf:
                 zf.extractall(dest_root)
 
-        await asyncio.to_thread(_extract)
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[bold blue]{task.description}"),
+            console=_progress_console,
+            transient=True,
+        ) as progress:
+            progress.add_task(f"Extracting to {dest_root}…", total=None)
+            await asyncio.to_thread(_extract)
         logger.info(f"[+] Extracted zip to {dest_root}")
