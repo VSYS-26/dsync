@@ -25,6 +25,11 @@ MAX_INDEX_SIZE = 64 * 1024 * 1024
 # Upper bound for an ERROR frame payload (4 KiB is plenty for code + message)
 MAX_ERROR_SIZE = 4 * 1024
 
+# Upper bound for a RENAME frame payload. Carries a YAML list of old->new
+# path pairs, far smaller than a full index, but in principle unbounded by
+# the number of renamed files, so it gets its own generous-but-finite cap.
+MAX_RENAME_SIZE = 16 * 1024 * 1024
+
 
 class MsgType(IntEnum):
     """Frame type identifier carried in the protocol header.
@@ -44,6 +49,7 @@ class MsgType(IntEnum):
     FILE_VERIFY = 6
     ERROR = 7
     INDEX = 8
+    RENAME = 9
 
 
 async def async_send_msg(writer: asyncio.StreamWriter, msg_type: int, data: bytes) -> None:
@@ -141,7 +147,7 @@ def get_tls_channel_binding(writer: asyncio.StreamWriter) -> bytes:
         raise RuntimeError("No SSL object on writer — connection is not TLS")
     if hasattr(ssl_object, "export_keying_material"):
         return cast(
-            bytes, ssl_object.export_keying_material("dsync-peer-auth-v1", 32, context=None)
+            "bytes", ssl_object.export_keying_material("dsync-peer-auth-v1", 32, context=None)
         )
     binding = ssl_object.get_channel_binding("tls-unique")
     if binding is None:
@@ -255,6 +261,55 @@ async def async_recv_index(reader: asyncio.StreamReader) -> bytes:
         return await reader.readexactly(length)
     except asyncio.IncompleteReadError as err:
         raise RuntimeError("Connection lost during index reception") from err
+
+
+async def async_send_rename(writer: asyncio.StreamWriter, rename_data: bytes) -> None:
+    """Send a rename-command payload (a serialized list of old->new pairs).
+
+    Args:
+        writer: Authenticated stream writer.
+        rename_data: Serialized rename commands (e.g., YAML bytes). May be an
+            empty list's serialization, which the peer still reads so the
+            frame ordering stays deterministic.
+    """
+    await async_send_msg(writer, MsgType.RENAME, rename_data)
+
+
+async def async_recv_rename(reader: asyncio.StreamReader) -> bytes:
+    """Receive a rename-command payload (a serialized list of old->new pairs).
+
+    Reads the frame header first and rejects payloads that exceed
+    ``MAX_RENAME_SIZE`` before allocating or reading the full body.
+
+    Args:
+        reader: Authenticated stream reader.
+
+    Returns:
+        Rename-command data as bytes (e.g., YAML).
+
+    Raises:
+        RuntimeError: If message type is not RENAME, or if the declared
+            payload length exceeds ``MAX_RENAME_SIZE``.
+    """
+    try:
+        header = await reader.readexactly(5)
+    except asyncio.IncompleteReadError as err:
+        raise RuntimeError("Connection closed before rename commands received") from err
+
+    msg_type, length = struct.unpack("!BI", header)
+
+    if msg_type != MsgType.RENAME:
+        raise RuntimeError(f"Expected RENAME (type {MsgType.RENAME}), got type {msg_type}")
+
+    if length > MAX_RENAME_SIZE:
+        raise RuntimeError(
+            f"Rename payload too large: {length} B exceeds limit of {MAX_RENAME_SIZE} B"
+        )
+
+    try:
+        return await reader.readexactly(length)
+    except asyncio.IncompleteReadError as err:
+        raise RuntimeError("Connection lost during rename reception") from err
 
 
 async def async_send_config_ack(writer: asyncio.StreamWriter) -> None:
