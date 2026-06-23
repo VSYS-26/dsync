@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Annotated
 
 import typer
 
+from dsync.cli.console import welcome
 from dsync.scheduler.runner import SchedulerRunner
 
 if TYPE_CHECKING:
@@ -30,4 +31,5 @@ def run(
         key: Path to TLS private key file.
     """
     state: AppState = ctx.obj
+    welcome(role="scheduler daemon")
     asyncio.run(SchedulerRunner(state.config_dir, cert=cert, key=key).run())
