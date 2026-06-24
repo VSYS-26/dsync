@@ -16,6 +16,11 @@ from dsync.network.p2p_core import (
     async_send_config,
     async_send_config_ack,
 )
+from dsync.network.sync_errors import (
+    ErrorCode,
+    SyncError,
+    notify_peer,
+)
 
 
 class ConfigExchange:
@@ -60,18 +65,34 @@ class ConfigExchange:
         if is_source:
             # Source sends first, then receives peer config
             await self._send_own_config(writer)
-            peer_config = await self._recv_peer_config(reader)
-            self._validate_no_circular_conflict(peer_device_id, peer_config)
+            peer_config = await self._recv_peer_config(writer, reader)
+            try:
+                self._validate_no_circular_conflict(peer_device_id, peer_config)
+            except ConfigConflictError as exc:
+                await notify_peer(writer, self._conflict_to_sync_error(exc))
+                raise
             await async_send_config_ack(writer)
             print("[+] Config exchange completed (no conflicts)")
             return peer_config
         # Peer receives first, then sends own config
-        source_config = await self._recv_peer_config(reader)
+        source_config = await self._recv_peer_config(writer, reader)
         await self._send_own_config(writer)
-        self._validate_no_circular_conflict(peer_device_id, source_config)
+        try:
+            self._validate_no_circular_conflict(peer_device_id, source_config)
+        except ConfigConflictError as exc:
+            await notify_peer(writer, self._conflict_to_sync_error(exc))
+            raise
         await async_recv_config_ack(reader)
         print("[+] Config exchange completed (no conflicts)")
         return source_config
+
+    @staticmethod
+    def _conflict_to_sync_error(exc: ConfigConflictError) -> SyncError:
+        """Map a :class:`ConfigConflictError` message to a :class:`SyncError`."""
+        text = str(exc)
+        if "Mirror conflict" in text:
+            return SyncError(code=ErrorCode.MIRROR_CONFLICT, message=text)
+        return SyncError(code=ErrorCode.BIDIRECTIONAL_CONFLICT, message=text)
 
     async def _send_own_config(self, writer: asyncio.StreamWriter) -> None:
         """Serialize and send own FoldersConfig."""
@@ -79,13 +100,29 @@ class ConfigExchange:
         print(f"[*] Sending config to peer ({len(config_yaml)} bytes)...")
         await async_send_config(writer, config_yaml)
 
-    async def _recv_peer_config(self, reader: asyncio.StreamReader) -> FoldersConfig:
-        """Receive and deserialize peer's FoldersConfig."""
+    async def _recv_peer_config(
+        self, writer: asyncio.StreamWriter, reader: asyncio.StreamReader
+    ) -> FoldersConfig:
+        """Receive and deserialize peer's FoldersConfig.
+
+        On bad YAML or schema-invalid payload we send an ERROR to the peer
+        so they see the same diagnosis we do.
+        """
         print("[*] Receiving config from peer...")
         config_yaml = await async_recv_config(reader)
         print(f"[+] Received config ({len(config_yaml)} bytes)")
-        config_dict = yaml.safe_load(config_yaml.decode("utf-8"))
-        return FoldersConfig.model_validate(config_dict or {})
+        try:
+            config_dict = yaml.safe_load(config_yaml.decode("utf-8"))
+            return FoldersConfig.model_validate(config_dict or {})
+        except Exception as exc:
+            await notify_peer(
+                writer,
+                SyncError(
+                    code=ErrorCode.INVALID_CONFIG_PAYLOAD,
+                    message=f"Peer config could not be parsed: {exc}",
+                ),
+            )
+            raise
 
     def _validate_no_circular_conflict(
         self, peer_device_id: str, peer_config: FoldersConfig
@@ -123,17 +160,19 @@ class ConfigExchange:
 
         if backup_conflicts:
             raise ConfigConflictError(
-                f"Bidirectional backup conflict: Both sides configured to backup "
-                f"{backup_conflicts} to each other. One side must use "
-                f"'backup-from-peer' instead of 'backup-to-peer'."
+                f"Bidirectional backup conflict for paths {sorted(backup_conflicts)}: "
+                f"device '{self.own_device_id}' and device '{peer_device_id}' are both "
+                f"configured to backup-to-peer to each other. One of them must switch "
+                f"to 'backup-from-peer' instead."
             )
 
         # Check for MIRROR conflicts
         mirror_conflicts = source_mirror_paths & peer_mirror_paths
         if mirror_conflicts:
             raise ConfigConflictError(
-                f"Mirror conflict: Both sides configured {mirror_conflicts} as MIRROR. "
-                f"This can lead to sync loops and data inconsistency."
+                f"Mirror conflict for paths {sorted(mirror_conflicts)}: device "
+                f"'{self.own_device_id}' and device '{peer_device_id}' both configured "
+                f"MIRROR mode. This can cause sync loops; only one side should be MIRROR."
             )
 
     @staticmethod
