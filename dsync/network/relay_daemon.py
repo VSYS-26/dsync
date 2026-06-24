@@ -59,6 +59,7 @@ from dsync.network.relay_protocol import (
     send_auth,
     send_json,
 )
+from dsync.state import AppState
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -66,7 +67,6 @@ if TYPE_CHECKING:
     from aioquic.asyncio.protocol import QuicConnectionProtocol
 
     from dsync.config import RelayServer
-    from dsync.state import AppState
 
 logger = logging.getLogger(__name__)
 
@@ -519,8 +519,9 @@ class RelayDaemon:
                 "status": "error",
                 "reason": "relay control channel is not currently connected; try again shortly",
             }
+        state = AppState.load(self._state.config_dir)
         device = next(
-            (d for d in self._state.devices.trusted_devices if d.id == request.peer_id),
+            (d for d in state.devices.trusted_devices if d.id == request.peer_id),
             None,
         )
         if device is None:
@@ -534,7 +535,7 @@ class RelayDaemon:
                 ),
             }
         folder = next(
-            (f for f in self._state.folders.entries if f.id == request.folder_id),
+            (f for f in state.folders.entries if f.id == request.folder_id),
             None,
         )
         if folder is None:
