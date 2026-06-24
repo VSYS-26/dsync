@@ -12,13 +12,22 @@ import contextlib
 import hashlib
 from pathlib import Path
 import socket
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, cast
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
+from rich.progress import (
+    BarColumn,
+    DownloadColumn,
+    Progress,
+    TaskID,
+    TextColumn,
+    TimeRemainingColumn,
+    TransferSpeedColumn,
+)
 import typer
 
-from dsync.cli.console import error, info, success, warn
+from dsync.cli.console import console, error, info, success, warn
 from dsync.config import SyncMode
 from dsync.identity import PeerMapStore
 from dsync.network.discovery import FingerprintAnnouncer, PeerDiscoveryRunner
@@ -156,61 +165,74 @@ async def _sync_all_folders(
     total_syncs = 0
     failed_syncs = 0
 
-    for idx, folder in enumerate(folders_to_sync, start=1):
-        if folder.mode == SyncMode.BACKUP_FROM_PEER:
-            info(
-                f"[{idx}/{len(folders_to_sync)}] Folder: {folder.id} - SKIPPED"
-                " (mode backup-from-peer: receive only)"
-            )
-            continue
-        if folder.mode not in (SyncMode.MIRROR, SyncMode.BACKUP_TO_PEER):
-            warn(f"Unknown mode for folder {folder.id}, skipping")
-            continue
-
-        if not folder.devices:
-            warn(
-                f"[{idx}/{len(folders_to_sync)}] Folder: {folder.id} - SKIPPED"
-                " (no devices configured)"
-            )
-            continue
-
-        info(f"\n[{idx}/{len(folders_to_sync)}] Folder: {folder.id}")
-        info(f"    Path: {folder.path}")
-        info(f"    Mode: {folder.mode.value}")
-        info(f"    Peers: {', '.join(folder.devices)}")
-
-        sync_tasks = []
-        peer_ids = []
-
-        for peer_id in folder.devices:
-            peer_device = _find_device(state, peer_id)
-            if peer_device is None:
-                error(f"Peer device {peer_id} not found in devices.yaml")
-                failed_syncs += 1
+    # One shared progress display for the whole run: each relay transfer adds
+    # its own byte-level task, so concurrent peers render side by side instead
+    # of fighting over the terminal.
+    with Progress(
+        TextColumn("[bold blue]{task.description}"),
+        BarColumn(),
+        DownloadColumn(),
+        TransferSpeedColumn(),
+        TimeRemainingColumn(),
+        console=console,
+        transient=True,
+    ) as progress:
+        for idx, folder in enumerate(folders_to_sync, start=1):
+            if folder.mode == SyncMode.BACKUP_FROM_PEER:
+                info(
+                    f"[{idx}/{len(folders_to_sync)}] Folder: {folder.id} - SKIPPED"
+                    " (mode backup-from-peer: receive only)"
+                )
+                continue
+            if folder.mode not in (SyncMode.MIRROR, SyncMode.BACKUP_TO_PEER):
+                warn(f"Unknown mode for folder {folder.id}, skipping")
                 continue
 
-            sync_tasks.append(
-                _sync_folder_with_peer(
-                    folder=folder,
-                    peer_id=peer_id,
-                    peer_fingerprint=peer_device.fingerprint,
-                    peer_map=peer_map,
-                    peer_host=peer_host,
-                    cert=cert,
-                    key=key,
-                    state=state,
+            if not folder.devices:
+                warn(
+                    f"[{idx}/{len(folders_to_sync)}] Folder: {folder.id} - SKIPPED"
+                    " (no devices configured)"
                 )
-            )
-            peer_ids.append(peer_id)
+                continue
 
-        results = await asyncio.gather(*sync_tasks, return_exceptions=True)
+            info(f"\n[{idx}/{len(folders_to_sync)}] Folder: {folder.id}")
+            info(f"    Path: {folder.path}")
+            info(f"    Mode: {folder.mode.value}")
+            info(f"    Peers: {', '.join(folder.devices)}")
 
-        for peer_id, result in zip(peer_ids, results, strict=False):
-            if isinstance(result, Exception):
-                error(f"Failed to sync with peer {peer_id}: {result}")
-                failed_syncs += 1
-            else:
-                total_syncs += 1
+            sync_tasks = []
+            peer_ids = []
+
+            for peer_id in folder.devices:
+                peer_device = _find_device(state, peer_id)
+                if peer_device is None:
+                    error(f"Peer device {peer_id} not found in devices.yaml")
+                    failed_syncs += 1
+                    continue
+
+                sync_tasks.append(
+                    _sync_folder_with_peer(
+                        folder=folder,
+                        peer_id=peer_id,
+                        peer_fingerprint=peer_device.fingerprint,
+                        peer_map=peer_map,
+                        peer_host=peer_host,
+                        cert=cert,
+                        key=key,
+                        state=state,
+                        progress=progress,
+                    )
+                )
+                peer_ids.append(peer_id)
+
+            results = await asyncio.gather(*sync_tasks, return_exceptions=True)
+
+            for peer_id, result in zip(peer_ids, results, strict=False):
+                if isinstance(result, Exception):
+                    error(f"Failed to sync with peer {peer_id}: {result}")
+                    failed_syncs += 1
+                else:
+                    total_syncs += 1
 
     return total_syncs, failed_syncs
 
@@ -232,6 +254,7 @@ async def _sync_folder_with_peer(
     cert: str,
     key: str,
     state: AppState,
+    progress: Progress,
 ) -> None:
     """Sync a folder with a peer: try local P2P first, fall back to relay.
 
@@ -244,6 +267,9 @@ async def _sync_folder_with_peer(
         cert: Path to local certificate file.
         key: Path to local private key file.
         state: Application state.
+        progress: Shared Rich progress display; the relay path adds a
+            byte-level task per file from progress frames streamed by the
+            daemon.
     """
     peer_ip: str | None
     if peer_host:
@@ -271,9 +297,26 @@ async def _sync_folder_with_peer(
             "Run `dsync relay connect <relay-id>` first."
         ) from None
 
-    response = await client.request(SyncFolderRequest(folder_id=folder.id, peer_id=peer_id))
+    tasks: dict[str, TaskID] = {}
+
+    def on_progress(event: dict[str, object]) -> None:
+        name = str(event.get("name", ""))
+        total = cast("int", event.get("total", 0))
+        transferred = cast("int", event.get("transferred", 0))
+        task_id = tasks.get(name)
+        if task_id is None:
+            task_id = progress.add_task(f"[{peer_id}] {name}", total=total)
+            tasks[name] = task_id
+        progress.update(task_id, completed=transferred)
+
+    response = await client.request(
+        SyncFolderRequest(folder_id=folder.id, peer_id=peer_id),
+        on_progress=on_progress,
+    )
     if response.status != "ok":
         raise RuntimeError(f"Relay sync failed: {response.reason}")
+    for task_id in tasks.values():
+        progress.remove_task(task_id)
     success(f"  [{peer_id}] synced via relay")
 
 

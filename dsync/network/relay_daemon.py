@@ -62,11 +62,13 @@ from dsync.network.relay_protocol import (
 from dsync.state import AppState
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
     from pathlib import Path
 
     from aioquic.asyncio.protocol import QuicConnectionProtocol
 
     from dsync.config import RelayServer
+    from dsync.network.local_ipc import ProgressSender
 
 logger = logging.getLogger(__name__)
 
@@ -498,6 +500,7 @@ class RelayDaemon:
     async def _handle_ipc_request(
         self,
         payload: dict[str, object],
+        send_progress: ProgressSender,
     ) -> dict[str, object]:
         op = payload.get("op")
         if op == "sync_folder":
@@ -505,7 +508,7 @@ class RelayDaemon:
                 request = SyncFolderRequest.model_validate(payload)
             except Exception as exc:
                 return {"status": "error", "reason": f"bad request: {exc}"}
-            return await self._do_sync_folder(request)
+            return await self._do_sync_folder(request, send_progress)
         if op == "status":
             return {
                 "status": "ok",
@@ -513,7 +516,9 @@ class RelayDaemon:
             }
         return {"status": "error", "reason": f"unknown op: {op!r}"}
 
-    async def _do_sync_folder(self, request: SyncFolderRequest) -> dict[str, object]:
+    async def _do_sync_folder(
+        self, request: SyncFolderRequest, send_progress: ProgressSender
+    ) -> dict[str, object]:
         if not self._relay_connected.is_set():
             return {
                 "status": "error",
@@ -559,17 +564,34 @@ class RelayDaemon:
                 ),
             }
 
+        async def on_progress(name: str, transferred: int, total: int) -> None:
+            await send_progress(
+                {
+                    "kind": "progress",
+                    "name": name,
+                    "transferred": transferred,
+                    "total": total,
+                }
+            )
+
         try:
             await self._run_outbound_sync(
                 folder=folder,
                 peer_device=device,
+                on_progress=on_progress,
             )
         except Exception as exc:
             logger.exception("outbound sync failed")
             return {"status": "error", "reason": str(exc)}
         return {"status": "ok", "reason": None}
 
-    async def _run_outbound_sync(self, *, folder, peer_device) -> None:  # type: ignore[no-untyped-def]
+    async def _run_outbound_sync(  # type: ignore[no-untyped-def]
+        self,
+        *,
+        folder,
+        peer_device,
+        on_progress: Callable[[str, int, int], Awaitable[None]] | None = None,
+    ) -> None:
         """CONNECT_REQUEST → PUNCH_INFO → open peer QUIC → PeerSession.as_source."""
         if self._relay_protocol is None or not self._relay_connected.is_set():
             raise RelayError("relay control channel is not connected")
@@ -618,6 +640,7 @@ class RelayDaemon:
                 sess_writer,
                 peer_protocol._quic,
                 expected_peer_fingerprint=peer_device.fingerprint,
+                on_progress=on_progress,
             )
         finally:
             # Tear down the peer connection — leave the socket alive (relay uses it).

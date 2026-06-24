@@ -43,6 +43,8 @@ from dsync.network.sync_errors import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
     from aioquic.quic.connection import QuicConnection
 
     from dsync.config import FolderEntry
@@ -55,6 +57,10 @@ _progress_console = Console(stderr=True)
 DEFAULT_CHUNK_SIZE = 64 * 1024
 MAX_META_SIZE = 8 * 1024
 MAX_CHUNK_SIZE = DEFAULT_CHUNK_SIZE
+
+#: Throttle for ``send_file``'s ``on_progress`` callback: emit at most one
+#: update per this many bytes sent (plus a final update at completion).
+_PROGRESS_EMIT_BYTES = 512 * 1024
 
 
 def _transfer_progress() -> Progress:
@@ -165,6 +171,7 @@ async def send_file(
     path: Path,
     root: Path,
     quic: QuicConnection | None = None,
+    on_progress: Callable[[str, int, int], Awaitable[None]] | None = None,
 ) -> None:
     """Send one file over an open asyncio TLS stream in chunks.
 
@@ -182,6 +189,10 @@ async def send_file(
             to real network delivery so the progress bar tracks transmission
             and the whole file is not buffered in memory at once. When
             ``None`` the loop runs unpaced (legacy behavior).
+        on_progress: Optional async callback invoked as
+            ``on_progress(name, transferred, total)`` while sending, throttled
+            to roughly every ``_PROGRESS_EMIT_BYTES``. Used to forward progress
+            to a remote watcher (e.g. the ``dsync run`` CLI over IPC).
 
     Raises:
         FileNotFoundError: If ``path`` does not exist or is not a regular file.
@@ -197,14 +208,22 @@ async def send_file(
     await async_send_msg(writer, MsgType.FILE_META, meta.to_yaml())
 
     stream_id = writer.get_extra_info("stream_id")
+    sent = 0
+    last_emit = 0
     try:
         with path.open("rb") as f, _transfer_progress() as progress:
             task_id = progress.add_task(f"Sending {path.name}", total=meta.size)
             while chunk := await asyncio.to_thread(f.read, DEFAULT_CHUNK_SIZE):
                 await async_send_msg(writer, MsgType.FILE_CHUNK, chunk)
+                sent += len(chunk)
                 progress.update(task_id, advance=len(chunk))
                 if quic is not None and stream_id is not None:
                     await await_stream_capacity(quic, stream_id)
+                if on_progress is not None and (
+                    sent - last_emit >= _PROGRESS_EMIT_BYTES or sent >= meta.size
+                ):
+                    last_emit = sent
+                    await on_progress(path.name, sent, meta.size)
             if quic is not None and stream_id is not None:
                 # Drain the last bytes so the bar reaches 100% before it clears.
                 await await_stream_capacity(quic, stream_id, high_water=0)

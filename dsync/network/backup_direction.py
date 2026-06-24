@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING
 from dsync.network.file_transfer import recv_file, send_file
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
     from pathlib import Path
 
     from aioquic.quic.connection import QuicConnection
@@ -94,6 +95,7 @@ class BackupSession:
         files: tuple[Path, ...],
         root: Path,
         quic: QuicConnection | None = None,
+        on_progress: Callable[[str, int, int], Awaitable[None]] | None = None,
     ) -> None:
         """Send ``files`` to the peer with paths relativized against ``root``.
 
@@ -104,6 +106,8 @@ class BackupSession:
             root: Folder root the paths should be relativized against.
             quic: Underlying QUIC connection, forwarded to ``send_file`` to
                 pace the transfer to real network delivery.
+            on_progress: Optional async progress callback forwarded to
+                ``send_file`` for each file.
 
         Raises:
             DirectionViolationError: If this session is not the SOURCE.
@@ -115,7 +119,7 @@ class BackupSession:
                 "only the source may send (source → peer is the only legal direction)."
             )
         for src in files:
-            await send_file(writer, reader, src, root, quic)
+            await send_file(writer, reader, src, root, quic, on_progress)
 
     async def receive_files(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter, recv_dir: Path

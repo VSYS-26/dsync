@@ -108,9 +108,16 @@ async def _write_frame(writer: asyncio.StreamWriter, body: bytes) -> None:
 # ---------------------------------------------------------------------------
 
 
-#: A handler takes the parsed request body (raw dict) and returns the
-#: response body (also a raw dict). Async because handlers will drive QUIC.
-RequestHandler = Callable[[dict[str, object]], Awaitable[dict[str, object]]]
+#: Sends one progress frame to the client mid-request. Handlers call this to
+#: stream byte-level transfer progress before the final response frame.
+ProgressSender = Callable[[dict[str, object]], Awaitable[None]]
+
+#: A handler takes the parsed request body (raw dict) plus a ``ProgressSender``
+#: and returns the final response body (also a raw dict). Async because
+#: handlers drive QUIC. The handler may call the sender any number of times to
+#: emit ``{"kind": "progress", ...}`` frames; the returned dict is written as
+#: the single terminating frame.
+RequestHandler = Callable[[dict[str, object], ProgressSender], Awaitable[dict[str, object]]]
 
 
 class LocalControlServer:
@@ -207,12 +214,11 @@ class LocalControlServer:
                 )
                 return
 
-            try:
-                response_obj = await self._handler(request)
-            except Exception as exc:
-                logger.exception("IPC handler raised")
-                response_obj = {"status": "error", "reason": str(exc)}
-
+            response_obj = await self._run_handler(request, reader, writer)
+            if response_obj is None:
+                # Client disconnected mid-request; the transfer was cancelled
+                # and there is nobody left to send the final frame to.
+                return
             await _write_frame(
                 writer,
                 json.dumps(response_obj).encode("utf-8"),
@@ -221,6 +227,53 @@ class LocalControlServer:
             writer.close()
             with contextlib.suppress(Exception):
                 await writer.wait_closed()
+
+    async def _run_handler(
+        self,
+        request: dict[str, object],
+        reader: asyncio.StreamReader,
+        writer: asyncio.StreamWriter,
+    ) -> dict[str, object] | None:
+        """Run the handler while watching for client disconnect.
+
+        Streams progress frames the handler emits. Races the handler against
+        end-of-stream on ``reader``: if the client goes away first (e.g. the
+        user hits Ctrl-C on ``dsync run``), the handler task is cancelled so
+        the in-flight transfer tears down instead of running to completion.
+        Returns the handler's response dict, or ``None`` if the client
+        disconnected before the handler finished.
+        """
+
+        async def send_progress(event: dict[str, object]) -> None:
+            await _write_frame(writer, json.dumps(event).encode("utf-8"))
+
+        async def call_handler() -> dict[str, object]:
+            return await self._handler(request, send_progress)
+
+        handler_task: asyncio.Task[dict[str, object]] = asyncio.create_task(call_handler())
+        # reader.read() with no limit returns only at EOF, i.e. when the client
+        # closes its socket — a clean disconnect signal while it just listens.
+        disconnect_task = asyncio.create_task(reader.read())
+        try:
+            await asyncio.wait(
+                {handler_task, disconnect_task},
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if not handler_task.done():
+                handler_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await handler_task
+                logger.info("IPC client disconnected; cancelled in-flight request")
+                return None
+            try:
+                return handler_task.result()
+            except Exception as exc:
+                logger.exception("IPC handler raised")
+                return {"status": "error", "reason": str(exc)}
+        finally:
+            disconnect_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await disconnect_task
 
 
 # ---------------------------------------------------------------------------
@@ -253,13 +306,28 @@ class LocalControlClient:
             raise FileNotFoundError(f"stale relay.current pointer: {path} does not exist")
         return cls(socket_path=path)
 
-    async def request(self, payload: BaseModel) -> IpcResponse:
-        """Send ``payload`` to the daemon and wait for an :class:`IpcResponse`."""
+    async def request(
+        self,
+        payload: BaseModel,
+        on_progress: Callable[[dict[str, object]], None] | None = None,
+    ) -> IpcResponse:
+        """Send ``payload`` and wait for the daemon's final :class:`IpcResponse`.
+
+        The daemon may stream ``{"kind": "progress", ...}`` frames before the
+        terminating response frame; each is passed to ``on_progress`` (if
+        given) and otherwise ignored. Any frame without ``kind == "progress"``
+        is treated as the final response.
+        """
         reader, writer = await asyncio.open_unix_connection(path=str(self._socket_path))
         try:
             await _write_frame(writer, payload.model_dump_json().encode("utf-8"))
-            response_body = await _read_frame(reader)
-            return IpcResponse.model_validate(json.loads(response_body.decode("utf-8")))
+            while True:
+                frame = json.loads((await _read_frame(reader)).decode("utf-8"))
+                if isinstance(frame, dict) and frame.get("kind") == "progress":
+                    if on_progress is not None:
+                        on_progress(frame)
+                    continue
+                return IpcResponse.model_validate(frame)
         finally:
             writer.close()
             with contextlib.suppress(Exception):

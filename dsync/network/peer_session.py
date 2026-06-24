@@ -54,6 +54,7 @@ from dsync.network.quic_core import (
 
 if TYPE_CHECKING:
     import asyncio
+    from collections.abc import Awaitable, Callable
 
     from aioquic.quic.connection import QuicConnection
 
@@ -172,6 +173,7 @@ class PeerSession:
         writer: asyncio.StreamWriter,
         quic_connection: QuicConnection,
         expected_peer_fingerprint: str | None = None,
+        on_progress: Callable[[str, int, int], Awaitable[None]] | None = None,
     ) -> str:
         """Run the AUTH-then-transfer flow on an open QUIC stream.
 
@@ -187,6 +189,9 @@ class PeerSession:
                 this value. Defence-in-depth: the peer must be both
                 trusted in ``devices.yaml`` *and* match the identity the
                 relay claimed to broker.
+            on_progress: Optional async ``on_progress(name, transferred,
+                total)`` callback. Only used on the SOURCE side, forwarded to
+                ``send_files`` to stream byte-level transfer progress.
 
         Returns:
             The verified ``device.id`` of the remote peer (used for
@@ -230,7 +235,9 @@ class PeerSession:
                 print(f"[+] '{self._folder.id}' already up to date, nothing to transfer")
             else:
                 files_to_send = tuple(folder_path / e.path for e in diff.to_upload)
-                await backup.send_files(writer, reader, files_to_send, folder_path, quic_connection)
+                await backup.send_files(
+                    writer, reader, files_to_send, folder_path, quic_connection, on_progress
+                )
 
             # Half-close so the receiver sees EOF and exits its loop. Then
             # block on the peer's EOF so the caller may safely close the
