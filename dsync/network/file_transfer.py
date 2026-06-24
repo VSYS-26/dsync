@@ -193,7 +193,7 @@ async def send_file(
             pass
         raise
 
-    msg_type, peer_hash_bytes = await async_recv_msg(reader)Umbennenung & Metadaten
+    msg_type, peer_hash_bytes = await async_recv_msg(reader)
     if msg_type is None or peer_hash_bytes is None:
         msg = "Connection closed before receiving peer hash verification"
         raise TransferIntegrityError(msg)
