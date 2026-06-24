@@ -1,0 +1,1406 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>VSYS26T2-14: Relay + P2P with NAT hole-punching (replaces direct-only P2P) - DSync</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="purple" data-md-color-accent="deep-purple">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#vsys26t2-14-relay-p2p-with-nat-hole-punching-replaces-direct-only-p2p" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="DSync" class="md-header__button md-logo" aria-label="DSync" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            DSync
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              VSYS26T2-14: Relay + P2P with NAT hole-punching (replaces direct-only P2P)
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="purple" data-md-color-accent="deep-purple"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="indigo"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Startseite
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../adrs/" class="md-tabs__link">
+          
+  
+  
+  ADRs
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../conventions/" class="md-tabs__link">
+          
+  
+  
+  Konventionen
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../meetings/" class="md-tabs__link">
+          
+  
+  
+  Besprechungen
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+  Recherche
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="DSync" class="md-nav__button md-logo" aria-label="DSync" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    DSync
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Startseite
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADRs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    ADRs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adrs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADRs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adrs/ADR-%23%23%23-Template/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Vorlage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_3" id="__nav_2_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADRS
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    ADRS
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adrs/ADR-001-YAML/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-001
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Konventionen
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Konventionen
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../conventions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Konventionen
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../conventions/branching-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verzweigungsmodell
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../conventions/cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../conventions/setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Besprechungen
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Besprechungen
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../meetings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Besprechungen
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../meetings/Meetings%20Nodes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Protokoll – 18.04.2026
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Recherche
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Recherche
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Recherche
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../VSYS26T2-27/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Geräteidentifikation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#context" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Context
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#architecture-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Architecture overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#protocol-messages-control-channel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Protocol messages (control channel)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#file-by-file-delta" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File-by-file delta
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="File-by-file delta">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#new" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        New
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#modified" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Modified
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#deleted" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deleted
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementation-order" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation order
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verification
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#risks-mitigations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Risks &amp; mitigations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#critical-files-for-implementation-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Critical files for implementation reference
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#out-of-scope-for-this-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Out of scope for this plan
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="vsys26t2-14-relay-p2p-with-nat-hole-punching-replaces-direct-only-p2p">VSYS26T2-14: Relay + P2P with NAT hole-punching (replaces direct-only P2P)<a class="headerlink" href="#vsys26t2-14-relay-p2p-with-nat-hole-punching-replaces-direct-only-p2p" title="Permanent link">&para;</a></h1>
+<h2 id="context">Context<a class="headerlink" href="#context" title="Permanent link">&para;</a></h2>
+<p>Today, <code>dsync</code> is purely peer-to-peer over TCP+TLS with mDNS-based discovery: every device must run a server, peers must be on the same LAN (or have ports forwarded). Cross-network sync is effectively impossible without manual IP and firewall work.</p>
+<p>The goal is <strong>WAN-friendly sync without manual network configuration</strong>. Approach: introduce <strong>relay servers as pure rendezvous points</strong> that observe each connected peer's public UDP endpoint and broker NAT hole-punching, after which two peers form a <strong>direct QUIC connection</strong> for the actual file transfer. Relays never see file bytes. The same <code>dsync</code> binary can run as a relay. mDNS and the legacy direct-connection commands are removed for a clean break.</p>
+<p>This is a breaking change: transport switches from TCP+TLS to UDP+QUIC, and discovery moves from mDNS to relay-based registration.</p>
+<hr />
+<h2 id="architecture-overview">Architecture overview<a class="headerlink" href="#architecture-overview" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code>                ┌──────────────────────┐
+                │   relay (dsync       │
+                │   relay serve)       │
+                └──────────┬───────────┘
+        control channel    │   control channel
+        (QUIC, app auth)   │   (QUIC, app auth)
+                ┌──────────┴───────────┐
+                │                      │
+        ┌───────▼─────┐         ┌──────▼──────┐
+        │  peer A     │         │  peer B     │
+        │ (dialer)    │◄═══════►│ (listener)  │
+        └─────────────┘  direct └─────────────┘
+                        QUIC stream after
+                        UDP hole-punch
+</code></pre></div>
+<ul>
+<li><strong>Control channel</strong>: long-lived QUIC connection peer↔relay, established by <code>dsync relay connect &lt;id&gt;</code>. Holds NAT mapping open via app-layer <code>CONTROL_PING</code>.</li>
+<li><strong>Signaling</strong>: <code>dsync sync run_backup</code> talks to the local <code>relay connect</code> process over a Unix-domain socket (POSIX) / loopback TCP + bearer token (Windows). The control-channel process sends <code>CONNECT_REQUEST</code> to the relay; relay forwards endpoint info to both peers via <code>PUNCH_INFO</code>.</li>
+<li><strong>Hole-punch</strong>: both peers reuse their <em>control-channel UDP socket</em> to send a burst of UDP datagrams toward the other's relay-observed endpoint (preserves the NAT mapping). One side (assigned by relay as <code>dialer</code>) then initiates QUIC INITIAL; the other (<code>listener</code>) accepts.</li>
+<li><strong>Auth</strong>: keep existing <strong>SPKI + RSA-PSS signature over TLS channel binding</strong> from <code>dsync/network/node.py:179-196</code>; reimplemented over <code>aioquic</code> via <code>export_keying_material</code> post-handshake.</li>
+<li><strong>Same-relay invariant</strong>: enforced at config-load via a new <code>relay_id</code> FK on <code>TrustedDevice</code> — both peers' device entries must point at the same relay id.</li>
+</ul>
+<hr />
+<h2 id="protocol-messages-control-channel">Protocol messages (control channel)<a class="headerlink" href="#protocol-messages-control-channel" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Direction</th>
+<th>Payload</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>AUTH</code></td>
+<td>peer → relay</td>
+<td>existing 294B SPKI + 256B sig (over channel binding)</td>
+</tr>
+<tr>
+<td><code>REGISTER_ACK</code></td>
+<td>relay → peer</td>
+<td>relay's observed <code>(ip, port)</code> of peer</td>
+</tr>
+<tr>
+<td><code>CONTROL_PING</code></td>
+<td>bidirectional</td>
+<td>empty, every 15s — NAT keepalive</td>
+</tr>
+<tr>
+<td><code>CONNECT_REQUEST</code></td>
+<td>peer → relay</td>
+<td><code>target_fingerprint</code></td>
+</tr>
+<tr>
+<td><code>PUNCH_INFO</code></td>
+<td>relay → peer</td>
+<td><code>peer_endpoint</code>, <code>peer_fingerprint</code>, <code>role: dialer|listener</code></td>
+</tr>
+<tr>
+<td><code>ERROR</code></td>
+<td>relay → peer</td>
+<td>reason (peer-unknown, peer-offline, untrusted)</td>
+</tr>
+</tbody>
+</table>
+<p>Reuses the <code>MsgType</code> enum pattern from <code>dsync/network/p2p_core.py:20-35</code>; drops the 5-byte length-prefix in favor of one QUIC stream per logical message.</p>
+<hr />
+<h2 id="file-by-file-delta">File-by-file delta<a class="headerlink" href="#file-by-file-delta" title="Permanent link">&para;</a></h2>
+<h3 id="new">New<a class="headerlink" href="#new" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>dsync/config/relay.py</code> — <code>RelayServer</code> model (id, host, port, fingerprint) + <code>RelaysConfig</code> (<code>FILENAME="relays.yaml"</code>). Mirrors <code>dsync/config/device.py:10-34</code>.</li>
+<li><code>dsync/cli/commands/relay/__init__.py</code>, <code>add.py</code>, <code>list.py</code>, <code>mod.py</code>, <code>rm.py</code> — CRUD, mirrors <code>dsync/cli/commands/device/*</code>.</li>
+<li><code>dsync/cli/commands/relay/connect.py</code> — long-running foreground; opens control channel, hosts local IPC daemon, runs keepalive + auto-reconnect.</li>
+<li><code>dsync/cli/commands/relay/serve.py</code> — <code>dsync relay serve</code> runs the relay server.</li>
+<li><code>dsync/network/quic_core.py</code> — aioquic config builder, <code>get_quic_channel_binding(protocol) -&gt; bytes</code> using <code>export_keying_material("dsync-peer-auth-v1", 32)</code>, <code>MsgType</code> enum (carried over).</li>
+<li><code>dsync/network/relay_protocol.py</code> — control-channel message schema + (de)serialization.</li>
+<li><code>dsync/network/relay_server.py</code> — relay-side: peer registry <code>{fingerprint → (control_conn, observed_endpoint)}</code>, matchmaking on <code>CONNECT_REQUEST</code>, role assignment.</li>
+<li><code>dsync/network/relay_client.py</code> — peer-side control-channel loop.</li>
+<li><code>dsync/network/hole_punch.py</code> — burst 5 UDP packets at 50ms, retry once after 2s; reuses control-channel socket via aioquic <code>DatagramProtocol</code>.</li>
+<li><code>dsync/network/peer_session.py</code> — port of <code>node.py</code>: auth + handshake + sync over a direct QUIC connection.</li>
+<li><code>dsync/network/local_ipc.py</code> — UDS on POSIX / <code>127.0.0.1</code> + per-session bearer token on Windows; <code>LocalControlServer</code> (hosted by <code>relay connect</code>) + <code>LocalControlClient</code> (used by <code>sync run_backup</code>).</li>
+<li><code>dsync-config/relays.yaml</code> (example).</li>
+<li><code>docs/adrs/ADR-002-relay-quic.md</code> — decision record (why pure-rendezvous relay, why QUIC over UDP, why same-relay constraint, what was rejected).</li>
+<li><code>docs/research/VSYS26T2-XX-relay.md</code> — research notes (STUN-like behaviour, aioquic API surface, NAT type assumptions).</li>
+</ul>
+<h3 id="modified">Modified<a class="headerlink" href="#modified" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>dsync/state.py</code> — add <code>relays: RelaysConfig</code> field on <code>AppState</code> (frozen dataclass at <code>dsync/state.py:9-21</code>).</li>
+<li><code>dsync/config/__init__.py</code> — re-export <code>RelaysConfig</code>, <code>RelayServer</code>.</li>
+<li><code>dsync/config/device.py</code> — add <code>relay_id: str</code> to <code>TrustedDevice</code> (required), include in unique-validation pass.</li>
+<li><code>dsync/cli/callbacks/config_dir.py</code> — load <code>relays.yaml</code>; validate every <code>TrustedDevice.relay_id</code> exists in <code>RelaysConfig</code> (raise <code>ValueError</code> like the existing folder→device check at lines 46-54).</li>
+<li><code>dsync/cli/__init__.py</code> — register <code>relay</code> group; drop <code>peer</code> group, drop <code>sync.start</code> registration.</li>
+<li><code>dsync/network/file_transfer.py</code> — keep <code>FileMeta</code>, integrity, chunking; swap <code>asyncio.StreamReader/Writer</code> I/O for aioquic stream send/receive. Drop the 5-byte length prefix; use one new QUIC stream per file.</li>
+<li><code>dsync/network/config_exchange.py</code> — same transport swap.</li>
+<li><code>dsync/network/backup_direction.py</code> — no logic change (it's transport-agnostic); update type hints if needed.</li>
+<li><code>dsync/network/errors.py</code> — add <code>RelayError</code>, <code>RelayAuthError</code>, <code>HolePunchError</code>, <code>IpcError</code>.</li>
+<li><code>dsync/cli/commands/sync/run_backup.py</code> — drop <code>peer-map.json</code> lookup; use <code>LocalControlClient</code> to send a sync request to the running <code>relay connect</code>. Resolve target relay via <code>state.devices[id].relay_id</code>. Error clearly if no <code>relay connect</code> is running.</li>
+<li><code>pyproject.toml</code> — add <code>aioquic&gt;=1.2.0</code>; remove <code>pyp2p</code> (unused) and <code>zeroconf</code>.</li>
+<li><code>README.md</code> — replace "Testing locally" section: 3-process flow (<code>relay serve</code>, two <code>relay connect</code>, then <code>run_backup</code>).</li>
+<li><code>docs/conventions/setup.md</code> — update to match new flow.</li>
+</ul>
+<h3 id="deleted">Deleted<a class="headerlink" href="#deleted" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>dsync/network/discovery.py</code> (mDNS announcer/listener)</li>
+<li><code>dsync/network/_start_peer.py</code> (legacy launcher)</li>
+<li><code>dsync/network/p2p_core.py</code> (replaced by <code>quic_core.py</code>)</li>
+<li><code>dsync/network/node.py</code> (replaced by <code>peer_session.py</code>)</li>
+<li><code>dsync/identity.py</code> (<code>PeerMapStore</code> no longer needed)</li>
+<li><code>dsync/cli/commands/peer/</code> (entire group: announce, discover, map)</li>
+<li><code>dsync/cli/commands/sync/start.py</code></li>
+<li><code>.dsync/peer-map.json</code> references in docs</li>
+</ul>
+<hr />
+<h2 id="implementation-order">Implementation order<a class="headerlink" href="#implementation-order" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Config &amp; state expansion</strong> — add <code>dsync/config/relay.py</code>, <code>relays.yaml</code>, <code>TrustedDevice.relay_id</code> (with FK validation in <code>config_dir.py</code>), wire into <code>AppState</code>. Add <code>relay add/list/mod/rm</code>. Update <code>dsync-config/devices.yaml</code> examples. Pure additive; existing flows untouched.</li>
+<li><strong>QUIC primitives + channel binding</strong> — add <code>aioquic</code> dep, write <code>quic_core.py</code> with <code>get_quic_channel_binding</code>. Unit test: two in-process <code>QuicConnection</code>s exchange a payload and both compute the same 32-byte binding using <code>export_keying_material</code>. Pin aioquic version.</li>
+<li><strong>Relay protocol + server</strong> — <code>relay_protocol.py</code>, <code>relay_server.py</code>, <code>dsync relay serve</code> command. Stub <code>relay_client.py</code> that registers and exits. Loopback test: server logs <code>REGISTER_ACK</code> and observes the right ephemeral port. Assert relay sees zero <code>FILE_*</code> frames in any test from PR 5+.</li>
+<li><strong>Hole-punch + BYO-socket QUIC</strong> — <code>hole_punch.py</code> + the aioquic <code>DatagramProtocol</code> wrapper that lets a <code>QuicConnection</code> reuse an already-bound UDP socket pointed at a specific peer endpoint. Loopback test exercises burst-send, role assignment (dialer/listener via relay), and retry-once.</li>
+<li><strong>PeerSession over QUIC</strong> — port AUTH frame + <code>BackupSession</code> + <code>ConfigExchange</code> + <code>file_transfer.send/recv_file</code> to QUIC streams. Direct (non-relayed) QUIC integration test on loopback between two <code>PeerSession</code> instances. Existing <code>BackupSession</code> direction enforcement at <code>backup_direction.py:56-116</code> should pass through unchanged.</li>
+<li><strong>IPC + run_backup rewrite</strong> — <code>local_ipc.py</code>; <code>relay connect</code> hosts the daemon; rewrite <code>sync run_backup</code> to use it. End-to-end test on loopback through a real relay process: <code>relay serve</code> + 2× <code>relay connect</code> + <code>sync run_backup</code>. This is the first PR where the full new flow exists.</li>
+<li><strong>Legacy removal</strong> — delete <code>discovery.py</code>, <code>identity.py</code>, <code>_start_peer.py</code>, <code>p2p_core.py</code>, <code>node.py</code>, <code>cli/commands/peer/*</code>, <code>cli/commands/sync/start.py</code>. Remove <code>pyp2p</code> and <code>zeroconf</code> from <code>pyproject.toml</code>. <code>grep -r 'zeroconf\|PeerMapStore\|peer_announce' dsync/</code> must come back clean.</li>
+<li><strong>Hardening + docs</strong> — app-layer <code>CONTROL_PING</code> every 15s on the relay client; auto-reconnect with exponential backoff on transient drops; friendly typer errors for <code>relay-unreachable</code>, <code>relay_id-mismatch</code>, <code>punch-failed</code>, <code>peer-not-registered</code>. ADR-002, README testing section, conventions update, research doc.</li>
+</ol>
+<hr />
+<h2 id="verification">Verification<a class="headerlink" href="#verification" title="Permanent link">&para;</a></h2>
+<p>Done in this order — each level catches different failure modes.</p>
+<ul>
+<li><strong>Unit (PR 2)</strong>: two <code>QuicConnection</code>s in one process produce matching channel-binding bytes.</li>
+<li><strong>Loopback integration (PR 3–6)</strong>: spawn <code>relay serve</code>, two <code>relay connect</code>, run <code>sync run_backup</code>. Assert file lands in <code>received-files/</code>, SHA-256 matches, <code>BackupSession</code> direction enforcement still raises on a wrong-way send, relay process logs show zero <code>FILE_*</code> frames.</li>
+<li><strong>Simulated NAT (PR 4 onwards, in CI)</strong>: Docker Compose, two containers behind <code>iptables -t nat -A POSTROUTING -j MASQUERADE</code>, relay on a third "internet" container. Run the full flow. <strong>This is the load-bearing NAT-traversal test</strong> — LAN tests prove nothing about real hole-punching.</li>
+<li><strong>Cross-WAN smoke (manual)</strong>: once two real machines on different networks are available, run the full flow and capture timing + success rate. Document expected failures on symmetric NATs.</li>
+<li><strong>Lint/type/security</strong>: <code>uv run pre-commit run --all-files</code> (Ruff, mypy strict, Bandit) must pass on every PR.</li>
+</ul>
+<hr />
+<h2 id="risks-mitigations">Risks &amp; mitigations<a class="headerlink" href="#risks-mitigations" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Risk</th>
+<th>Mitigation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>aioquic's TLS keying-material exporter is private API in some versions</td>
+<td>Pin aioquic; isolate access in <code>quic_core.get_quic_channel_binding</code> so a future swap is one function. Gate PR 2 on confirming public API exists.</td>
+</tr>
+<tr>
+<td>Symmetric NATs break hole-punching</td>
+<td>Documented limitation. Add <code>relay-fallback</code> (TURN-style) explicitly as out-of-scope future work in ADR-002.</td>
+</tr>
+<tr>
+<td>Windows UDS unavailability</td>
+<td><code>local_ipc.py</code> branches: UDS on POSIX, loopback TCP + bearer token on Windows. Same <code>LocalControlClient</code> interface.</td>
+</tr>
+<tr>
+<td>LAN-only testing fakes success</td>
+<td>CI uses Docker+iptables MASQUERADE (PR 4 onwards). Manual cross-WAN smoke before declaring "done".</td>
+</tr>
+<tr>
+<td>Relay metadata exposure (relay sees who talks to whom and when)</td>
+<td>Acknowledged in ADR-002. File content never traverses relay.</td>
+</tr>
+<tr>
+<td>Breaking change leaves users without a migration</td>
+<td>This is a course PoC, not a released product — clean break is acceptable. README rewrite covers new flow.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="critical-files-for-implementation-reference">Critical files for implementation reference<a class="headerlink" href="#critical-files-for-implementation-reference" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>dsync/network/node.py:161-227</code> — TLS handshake + AUTH frame flow to port to <code>peer_session.py</code></li>
+<li><code>dsync/network/p2p_core.py:215-235</code> (TLS context), <code>:37-59</code> (framing) — replace with aioquic equivalents</li>
+<li><code>dsync/network/file_transfer.py:23-50, 82-105</code> — <code>FileMeta</code> + chunk loop, adapt I/O only</li>
+<li><code>dsync/network/backup_direction.py:56-116</code> — direction enforcement, preserve unchanged</li>
+<li><code>dsync/config/device.py:10-34</code> — model template for <code>RelayServer</code></li>
+<li><code>dsync/config/_base.py:10-32</code> — <code>YamlFileConfig</code> base class</li>
+<li><code>dsync/cli/callbacks/config_dir.py:26-62</code> — config-load callback; add <code>relays</code> + <code>relay_id</code> FK check</li>
+<li><code>dsync/cli/commands/device/add.py:15-50</code>, <code>list.py:10-23</code>, <code>mod.py:16-52</code>, <code>rm.py:13-36</code> — CRUD templates for the <code>relay</code> group</li>
+<li><code>dsync/state.py:9-21</code> — add <code>relays</code> field to <code>AppState</code></li>
+</ul>
+<hr />
+<h2 id="out-of-scope-for-this-plan">Out of scope for this plan<a class="headerlink" href="#out-of-scope-for-this-plan" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Cross-relay federation (peers on different relays).</li>
+<li>TURN-style relay fallback when hole-punching fails.</li>
+<li>Daemonized/backgrounded <code>relay connect</code> — kept foreground; revisit after this lands.</li>
+<li>Key rotation for relay or peer keys.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "content.code.copy", "content.action.edit"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="https://unpkg.com/mermaid/dist/mermaid.min.js"></script>
+      
+        <script src="https://unpkg.com/katex@0/dist/katex.min.js"></script>
+      
+        <script src="https://unpkg.com/katex@0/dist/auto-render.min.js"></script>
+      
+    
+  </body>
+</html>
