@@ -10,7 +10,7 @@ import typer
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
 
-from dsync.cli.console import error, info, success, warn
+from dsync.cli.console import error, info, success, warn, welcome
 from dsync.identity import PeerMapStore
 from dsync.network.discovery import FingerprintAnnouncer, PeerDiscoveryRunner
 from dsync.network.node import P2PNode
@@ -78,6 +78,7 @@ def start_p2p_sync(
     state: AppState = ctx.obj
 
     is_server: bool = mode.lower() == "server"
+    welcome(role="server (receiver)" if is_server else "client (sender)", port=port, host=host)
 
     # Resolve folder for client mode
     client_folder: FolderEntry | None = None
