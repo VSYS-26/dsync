@@ -230,7 +230,7 @@ class PeerSession:
                 print(f"[+] '{self._folder.id}' already up to date, nothing to transfer")
             else:
                 files_to_send = tuple(folder_path / e.path for e in diff.to_upload)
-                await backup.send_files(writer, reader, files_to_send, folder_path)
+                await backup.send_files(writer, reader, files_to_send, folder_path, quic_connection)
 
             # Half-close so the receiver sees EOF and exits its loop. Then
             # block on the peer's EOF so the caller may safely close the

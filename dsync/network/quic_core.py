@@ -17,6 +17,7 @@ import struct
 from typing import TYPE_CHECKING, Final, cast
 
 from aioquic.quic.configuration import QuicConfiguration
+from aioquic.quic.connection import QuicConnectionState
 from aioquic.tls import hkdf_expand_label
 
 if TYPE_CHECKING:
@@ -90,6 +91,35 @@ async def async_send_msg(
     header = struct.pack("!BI", msg_type, len(data))
     writer.write(header + data)
     await writer.drain()
+
+
+#: Cap on un-acked stream bytes before a sender pauses feeding new chunks.
+#: aioquic buffers everything handed to send_stream_data in memory, so without
+#: this a whole file is read into RAM and "sent" instantly. A few MiB keeps the
+#: pipe full while the progress bar tracks real delivery.
+STREAM_SEND_HIGH_WATER: Final[int] = 4 * 1024 * 1024
+_DRAIN_POLL_SECONDS: Final[float] = 0.02
+
+
+async def await_stream_capacity(
+    quic: QuicConnection,
+    stream_id: int,
+    high_water: int = STREAM_SEND_HIGH_WATER,
+) -> None:
+    """Block until the stream's un-acked send buffer falls below high_water.
+
+    aioquic's per-stream writer never pauses writing, so StreamWriter.drain()
+    returns immediately and gives no transmission backpressure. Poll the stream
+    sender's buffered-but-unacked byte count instead, pacing the caller to the
+    rate the network drains the buffer. Returns early if the connection is no
+    longer live so a dead peer cannot wedge the loop.
+    """
+    live = (QuicConnectionState.FIRSTFLIGHT, QuicConnectionState.CONNECTED)
+    while quic._state in live:
+        stream = quic._streams.get(stream_id)
+        if stream is None or len(stream.sender._buffer) <= high_water:
+            return
+        await asyncio.sleep(_DRAIN_POLL_SECONDS)
 
 
 async def async_recv_msg(

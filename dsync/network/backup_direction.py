@@ -32,6 +32,8 @@ from dsync.network.file_transfer import recv_file, send_file
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from aioquic.quic.connection import QuicConnection
+
 
 class TransferRole(Enum):
     """Role of the local node in a backup-mode sync.
@@ -91,8 +93,17 @@ class BackupSession:
         reader: asyncio.StreamReader,
         files: tuple[Path, ...],
         root: Path,
+        quic: QuicConnection | None = None,
     ) -> None:
         """Send ``files`` to the peer with paths relativized against ``root``.
+
+        Args:
+            writer: Authenticated asyncio stream from the connection setup.
+            reader: Authenticated asyncio stream from the connection setup.
+            files: Source files to transmit.
+            root: Folder root the paths should be relativized against.
+            quic: Underlying QUIC connection, forwarded to ``send_file`` to
+                pace the transfer to real network delivery.
 
         Raises:
             DirectionViolationError: If this session is not the SOURCE.
@@ -104,7 +115,7 @@ class BackupSession:
                 "only the source may send (source → peer is the only legal direction)."
             )
         for src in files:
-            await send_file(writer, reader, src, root)
+            await send_file(writer, reader, src, root, quic)
 
     async def receive_files(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter, recv_dir: Path
