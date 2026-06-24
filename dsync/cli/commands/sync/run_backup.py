@@ -1,21 +1,40 @@
-"""CLI command to manually sync folders with their configured peers."""
+"""CLI command to sync folders: tries local P2P first, falls back to relay daemon.
+
+Local path: discovers peers via mDNS/Zeroconf and connects directly via QUIC.
+Relay fallback: if no peer found on LAN (or connection fails), asks the running
+relay-connect daemon over a Unix-domain socket to perform the sync.
+"""
 
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hashlib
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated
+import socket
+from typing import TYPE_CHECKING, Annotated, cast
 
-import typer
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
+from rich.progress import (
+    BarColumn,
+    DownloadColumn,
+    Progress,
+    TaskID,
+    TextColumn,
+    TimeRemainingColumn,
+    TransferSpeedColumn,
+)
+import typer
 
-from dsync.cli.console import error, info, success, warn
+from dsync.cli.console import console, error, info, success, warn
 from dsync.config import SyncMode
 from dsync.identity import PeerMapStore
 from dsync.network.discovery import FingerprintAnnouncer, PeerDiscoveryRunner
-from dsync.network.node import P2PNode
+from dsync.network.local_ipc import LocalControlClient, SyncFolderRequest
+from dsync.network.peer_session import PeerSession
+from dsync.network.quic_core import build_quic_configuration
+from dsync.network.quic_transport import start_dialer
 
 if TYPE_CHECKING:
     from typing import Any
@@ -23,8 +42,10 @@ if TYPE_CHECKING:
     from dsync.config import FolderEntry, TrustedDevice
     from dsync.state import AppState
 
+_LOCAL_P2P_PORT = 9999
 
-def _get_own_fingerprint(cert_path: str, key_path: str) -> str | None:
+
+def _get_own_fingerprint(_cert_path: str, key_path: str) -> str | None:
     """Extract fingerprint from the TLS certificate (matches devices.yaml)."""
     try:
         with Path(key_path).open("rb") as f:
@@ -41,31 +62,31 @@ def _get_own_fingerprint(cert_path: str, key_path: str) -> str | None:
 def sync(
     ctx: typer.Context,
     folder_id: Annotated[
-        str | None, typer.Option("--folder-id", "-f", help="Specific folder ID (or sync all)")
+        str | None,
+        typer.Option(
+            "--folder-id",
+            "-f",
+            help="Specific folder ID (omit to sync all configured folders)",
+        ),
     ] = None,
     peer_host: Annotated[
         str | None,
-        typer.Option("--peer-host", help="Peer IP/hostname (bypasses peer map)"),
+        typer.Option("--peer-host", help="Peer IP/hostname (bypasses peer discovery)"),
     ] = None,
     discover_timeout: Annotated[
         int,
-        typer.Option("--discover-timeout", help="Seconds to wait for peer discovery"),
+        typer.Option("--discover-timeout", help="Seconds to wait for LAN peer discovery"),
     ] = 8,
-    map_file: Annotated[Path, typer.Option("--map-file", help="Path to peer map JSON file")] = Path(
-        ".dsync"
-    )
-    / "peer-map.json",
     cert: Annotated[str, typer.Option(help="Path to your certificate")] = "cert.pem",
     key: Annotated[str, typer.Option(help="Path to your private key")] = "key.pem",
 ) -> None:
-    """Manually sync folders with their configured peers.
+    """Sync folders: tries local P2P first, falls back to relay daemon.
 
     Without --folder-id: syncs all folders from folders.yaml.
     With --folder-id: syncs only the specific folder.
 
     Only folders with mode 'mirror' or 'backup-to-peer' are sent.
-    Folders with mode 'backup-from-peer' are receive-only and are skipped
-    by this send command.
+    Folders with mode 'backup-from-peer' are receive-only and are skipped.
 
     Each folder is synced with all its configured trusted devices.
     """
@@ -74,45 +95,34 @@ def sync(
     if not state.folders.entries:
         warn("No folders configured in folders.yaml")
         raise typer.Exit(code=1)
-
     if not state.devices.trusted_devices:
         warn("No trusted devices configured in devices.yaml")
         raise typer.Exit(code=1)
 
-    # Load peer map
-    peer_store = PeerMapStore(file_path=map_file)
-    peer_map = peer_store.list_peers()
-
-    # Auto-discover peers if no explicit host given
-    if not peer_host:
-        peer_map = _auto_discover_peers(peer_store, discover_timeout, cert, key)
-
-    if not peer_map and not peer_host:
-        warn("Peer map is empty. Run 'dsync peer discover' first, or use --peer-host.")
-        raise typer.Exit(code=1)
-
-    # Choose which folders should be synced
     if folder_id is None:
-        folders_to_sync = state.folders.entries
+        folders_to_sync = list(state.folders.entries)
         info(f"Syncing all {len(folders_to_sync)} configured folder(s)...")
     else:
-        folder = _find_folder(state, folder_id)
+        folder = next((f for f in state.folders.entries if f.id == folder_id), None)
         if folder is None:
             error(f"Folder '{folder_id}' not found in folders.yaml")
             raise typer.Exit(code=1)
         folders_to_sync = [folder]
         info(f"Syncing folder '{folder_id}'...")
 
-    # Run async sync
+    peer_map: dict[str, Any] = {}
+    if not peer_host:
+        peer_map = _auto_discover_peers(PeerMapStore(), discover_timeout, cert, key)
+
     total_syncs, failed_syncs = asyncio.run(
         _sync_all_folders(folders_to_sync, peer_map, peer_host, cert, key, state)
     )
 
-
     info(f"\n{'=' * 60}")
-    success(f"Completed: {total_syncs} successful sync(s)")
     if failed_syncs > 0:
-        warn(f"Failed: {failed_syncs} sync(s)")
+        warn(f"Completed: {total_syncs} successful, {failed_syncs} failed")
+        raise typer.Exit(code=1)
+    success(f"Completed: {total_syncs} successful sync(s)")
 
 
 def _auto_discover_peers(
@@ -155,71 +165,76 @@ async def _sync_all_folders(
     total_syncs = 0
     failed_syncs = 0
 
-    for idx, folder in enumerate(folders_to_sync, start=1):
-        # Mode filter: only send mirror and backup-to-peer
-        if folder.mode == SyncMode.BACKUP_FROM_PEER:
-            info(
-                f"[{idx}/{len(folders_to_sync)}] Folder: {folder.id} - SKIPPED (mode backup-from-peer: receive only)"
-            )
-            continue
-        if folder.mode not in (SyncMode.MIRROR, SyncMode.BACKUP_TO_PEER):
-            warn(f"Unknown mode for folder {folder.id}, skipping")
-            continue
-
-        if not folder.devices:
-            warn(
-                f"[{idx}/{len(folders_to_sync)}] Folder: {folder.id} - SKIPPED (no devices configured)"
-            )
-            continue
-
-
-        info(f"\n[{idx}/{len(folders_to_sync)}] Folder: {folder.id}")
-        info(f"    Path: {folder.path}")
-        info(f"    Mode: {folder.mode.value}")
-        info(f"    Peers: {', '.join(folder.devices)}")
-
-        sync_tasks = []
-        peer_ids = []
-
-        for peer_id in folder.devices:
-            peer_device = _find_device(state, peer_id)
-            if peer_device is None:
-                error(f"Peer device {peer_id} not found in devices.yaml")
-                failed_syncs += 1
+    # One shared progress display for the whole run: each relay transfer adds
+    # its own byte-level task, so concurrent peers render side by side instead
+    # of fighting over the terminal.
+    with Progress(
+        TextColumn("[bold blue]{task.description}"),
+        BarColumn(),
+        DownloadColumn(),
+        TransferSpeedColumn(),
+        TimeRemainingColumn(),
+        console=console,
+        transient=True,
+    ) as progress:
+        for idx, folder in enumerate(folders_to_sync, start=1):
+            if folder.mode == SyncMode.BACKUP_FROM_PEER:
+                info(
+                    f"[{idx}/{len(folders_to_sync)}] Folder: {folder.id} - SKIPPED"
+                    " (mode backup-from-peer: receive only)"
+                )
+                continue
+            if folder.mode not in (SyncMode.MIRROR, SyncMode.BACKUP_TO_PEER):
+                warn(f"Unknown mode for folder {folder.id}, skipping")
                 continue
 
-            sync_tasks.append(
-                _sync_folder_with_peer(
-                    folder=folder,
-                    peer_fingerprint=peer_device.fingerprint,
-                    peer_map=peer_map,
-                    peer_host=peer_host,
-                    cert=cert,
-                    key=key,
-                    state=state,
+            if not folder.devices:
+                warn(
+                    f"[{idx}/{len(folders_to_sync)}] Folder: {folder.id} - SKIPPED"
+                    " (no devices configured)"
                 )
-            )
-            peer_ids.append(peer_id)
+                continue
 
-        results = await asyncio.gather(*sync_tasks, return_exceptions=True)
+            info(f"\n[{idx}/{len(folders_to_sync)}] Folder: {folder.id}")
+            info(f"    Path: {folder.path}")
+            info(f"    Mode: {folder.mode.value}")
+            info(f"    Peers: {', '.join(folder.devices)}")
 
-        for peer_id, result in zip(peer_ids, results, strict=False):
-            if isinstance(result, Exception):
-                error(f"Failed to sync with peer {peer_id}: {result}")
-                failed_syncs += 1
-            else:
-                success(f"Synced with peer {peer_id}")
-                total_syncs += 1
+            sync_tasks = []
+            peer_ids = []
+
+            for peer_id in folder.devices:
+                peer_device = _find_device(state, peer_id)
+                if peer_device is None:
+                    error(f"Peer device {peer_id} not found in devices.yaml")
+                    failed_syncs += 1
+                    continue
+
+                sync_tasks.append(
+                    _sync_folder_with_peer(
+                        folder=folder,
+                        peer_id=peer_id,
+                        peer_fingerprint=peer_device.fingerprint,
+                        peer_map=peer_map,
+                        peer_host=peer_host,
+                        cert=cert,
+                        key=key,
+                        state=state,
+                        progress=progress,
+                    )
+                )
+                peer_ids.append(peer_id)
+
+            results = await asyncio.gather(*sync_tasks, return_exceptions=True)
+
+            for peer_id, result in zip(peer_ids, results, strict=False):
+                if isinstance(result, Exception):
+                    error(f"Failed to sync with peer {peer_id}: {result}")
+                    failed_syncs += 1
+                else:
+                    total_syncs += 1
 
     return total_syncs, failed_syncs
-
-
-def _find_folder(state: AppState, folder_id: str) -> FolderEntry | None:
-    """Find a folder entry by its ID."""
-    for folder in state.folders.entries:
-        if folder.id == folder_id:
-            return folder
-    return None
 
 
 def _find_device(state: AppState, device_id: str) -> TrustedDevice | None:
@@ -232,55 +247,101 @@ def _find_device(state: AppState, device_id: str) -> TrustedDevice | None:
 
 async def _sync_folder_with_peer(
     folder: FolderEntry,
+    peer_id: str,
     peer_fingerprint: str,
     peer_map: dict[str, Any],
     peer_host: str | None,
     cert: str,
     key: str,
     state: AppState,
+    progress: Progress,
 ) -> None:
-    """Perform the actual sync operation between a folder and a peer.
+    """Sync a folder with a peer: try local P2P first, fall back to relay.
 
     Args:
-        folder: The folder configuration from folders.yaml
-        peer_fingerprint: The peer's public key fingerprint
-        peer_map: Dictionary of fingerprint -> peer info mappings
-        peer_host: Direct peer IP/hostname (bypasses peer_map if given)
-        cert: Path to local certificate file
-        key: Path to local private key file
-        state: Application state
-
-    Raises:
-        ValueError: If peer not found in peer map and no peer_host given
-        Exception: If sync fails
+        folder: The folder configuration from folders.yaml.
+        peer_id: The device ID of the peer.
+        peer_fingerprint: The peer's public key fingerprint.
+        peer_map: Dictionary of fingerprint -> peer info from LAN discovery.
+        peer_host: Direct peer IP/hostname override (bypasses discovery).
+        cert: Path to local certificate file.
+        key: Path to local private key file.
+        state: Application state.
+        progress: Shared Rich progress display; the relay path adds a
+            byte-level task per file from progress frames streamed by the
+            daemon.
     """
-    # Resolve peer IP: either from --peer-host or from peer map
+    peer_ip: str | None
     if peer_host:
         peer_ip = peer_host
     else:
-        if peer_fingerprint not in peer_map:
-            raise ValueError(f"Peer {peer_fingerprint} not found in peer map")
-        peer_info = peer_map[peer_fingerprint]
-        peer_ip = peer_info.ipv4
+        peer_info = peer_map.get(peer_fingerprint)
+        peer_ip = peer_info.ipv4 if peer_info is not None else None
 
-    info(f"Connecting to {peer_fingerprint[:16]}... at {peer_ip}")
+    if peer_ip is not None:
+        info(f"  [{peer_id}] Connecting directly at {peer_ip}:{_LOCAL_P2P_PORT}...")
+        try:
+            await _sync_direct_quic(folder, peer_ip, _LOCAL_P2P_PORT, cert, key, state)
+        except Exception as exc:
+            warn(f"  [{peer_id}] Local P2P failed ({exc}), trying relay...")
+        else:
+            success(f"  [{peer_id}] synced via local P2P")
+            return
 
-    # Create P2PNode as client
-    node = P2PNode(
-        is_server=False,
-        cert_path=cert,
-        key_path=key,
-        state=state,
-        folder=folder,
-    )
-
-    port = 9999
-
+    # Relay fallback via IPC daemon
     try:
-        await node.start(host=peer_ip, port=port)
-    except ConnectionRefusedError:
-        raise ConnectionError(
-            f"Could not connect to {peer_ip}:{port} - peer may be offline"
+        client = LocalControlClient.discover()
+    except FileNotFoundError:
+        raise RuntimeError(
+            f"Peer {peer_id} not reachable locally and relay daemon not running. "
+            "Run `dsync relay connect <relay-id>` first."
         ) from None
-    except Exception as e:
-        raise RuntimeError(f"Sync failed: {e}") from e
+
+    tasks: dict[str, TaskID] = {}
+
+    def on_progress(event: dict[str, object]) -> None:
+        name = str(event.get("name", ""))
+        total = cast("int", event.get("total", 0))
+        transferred = cast("int", event.get("transferred", 0))
+        task_id = tasks.get(name)
+        if task_id is None:
+            task_id = progress.add_task(f"[{peer_id}] {name}", total=total)
+            tasks[name] = task_id
+        progress.update(task_id, completed=transferred)
+
+    response = await client.request(
+        SyncFolderRequest(folder_id=folder.id, peer_id=peer_id),
+        on_progress=on_progress,
+    )
+    if response.status != "ok":
+        raise RuntimeError(f"Relay sync failed: {response.reason}")
+    for task_id in tasks.values():
+        progress.remove_task(task_id)
+    success(f"  [{peer_id}] synced via relay")
+
+
+async def _sync_direct_quic(
+    folder: FolderEntry,
+    peer_ip: str,
+    peer_port: int,
+    cert: str,
+    key: str,
+    state: AppState,
+) -> None:
+    """Direct QUIC sync: dial peer and send folder via PeerSession."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.bind(("0.0.0.0", 0))  # nosec B104
+    sock.setblocking(False)
+
+    cfg = build_quic_configuration(is_client=True, cert_path=cert, key_path=key)
+    endpoint = await start_dialer(sock=sock, peer_addr=(peer_ip, peer_port), configuration=cfg)
+    try:
+        await asyncio.wait_for(endpoint.protocol.wait_connected(), timeout=15.0)
+        reader, writer = await endpoint.protocol.create_stream()
+
+        session = PeerSession.as_source(cert_path=cert, key_path=key, state=state, folder=folder)
+        await session.run(reader, writer, endpoint.protocol._quic)
+    finally:
+        with contextlib.suppress(Exception):
+            endpoint.transport.close()
+        sock.close()

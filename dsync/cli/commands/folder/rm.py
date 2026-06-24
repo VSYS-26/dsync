@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from dsync.state import AppState
 
 
-def rm(ctx: typer.Context, id: Annotated[str, typer.Argument(help="Unique folder id")]) -> None:  # noqa: A002
+def rm(ctx: typer.Context, id: Annotated[str, typer.Argument(help="Unique folder id")]) -> None:
     """Remove a configured folder.."""
     state: AppState = ctx.obj
 

@@ -1,22 +1,15 @@
-"""Peer folder-config consistency checks for the pre-sync handshake.
+"""Peer folder-config compatibility checks run before file transfer.
 
-When two peers connect for a sync, each side may hold its own
-``folders.yaml`` entry for the folder being transferred. Before any
-file data is moved, the receiver verifies that the sender's entry does
-not contradict the local one. A contradiction means the two sides
-disagree on what the sync should do — continuing would either move
-data in the wrong direction or accept it from an unauthorized device.
-
-The function raises :class:`PeerAuthError` on the first contradiction
-because the caller is expected to abort the connection — there is no
-useful "partial sync" state to recover into.
+After AUTH and config exchange, each side verifies the other's folder entry
+is a legal counterpart. A mismatch means the two sides disagree on sync
+direction — continuing would move data the wrong way or accept it from an
+unauthorized device.
 """
 
 from __future__ import annotations
 
 from dsync.config import FolderEntry, SyncMode
 from dsync.network.errors import PeerAuthError
-
 
 _COMPLEMENTARY_MODES: dict[SyncMode, SyncMode] = {
     SyncMode.MIRROR: SyncMode.MIRROR,

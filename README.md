@@ -127,37 +127,21 @@ This project uses [uv](https://docs.astral.sh/uv/) for fast Python dependency ma
 
 ## Testing locally
 
-To test the peer-to-peer connection on your local machine, you need to simulate two devices communicating directly. This requires two separate terminal windows.
+dsync runs as three cooperating processes — a relay plus one **`dsync relay connect`** daemon per peer — and a one-shot **`dsync sync run_backup`** that hands work to the local daemon over a Unix-domain socket. To exercise the full flow on a single host you need **four terminals**: relay, peer-A daemon, peer-B daemon, `sync run_backup`.
 
-#### **1. Generate Certificates & Setup Trust**
+A scripted setup and step-by-step walkthrough live in **[`docs/smoke-test.md`](docs/smoke-test.md)**. The TL;DR:
 
-Before two peers can communicate, they need their cryptographic identities.
-
-   1. Generate a self-signed certificate and private key for your local test. The script/command will output a SHA-256 fingerprint for the public key.
-   (Note: Since both local nodes will run in the same directory, they will share this certificate to authenticate each other during the local test).
-   2. Create or edit the configuration file at dsync-config/devices.yaml.
-   3. Add the generated fingerprint to this file to authorize the connection (Mutual TLS authentication):
-   ```yaml
-   trusted_devices:
-      - id: local-test-node
-        fingerprint: "YOUR_GENERATED_FINGERPRINT_HASH_HERE"
-   ```
-#### **2. Run the two Terminals**
-
-Open two separate terminals in the root directory of the project.
-
-**Terminal 1: Start Node A (Server mode)**
-
-This node opens a local port (default 9999) and waits for a trusted partner to connect.
 ```bash
-uv run python -m dsync.main sync start --mode server
+# 1. Generate fixtures (certs, configs, sample file)
+.venv/bin/python scripts/smoke_setup.py /tmp/dsync-smoke
+# → prints the exact four terminal commands you need
 ```
 
-**Terminal 2: Start Node B (Client mode)**
+After running the four terminal commands the script printed:
 
-This node connects directly to the local server and initiates the Mutual TLS handshake and sync process.
 ```bash
-uv run python -m dsync.main sync start --mode client
+diff /tmp/dsync-smoke/peer-a/src-folder/hello.txt \
+     /tmp/dsync-smoke/peer-b/recv-files/peer-a/hello.txt   # silent = success
 ```
 
-If everything is configured correctly, you will see the Mutual TLS verification succeed and the nodes exchanging their file hashes.
+See `docs/smoke-test.md` for the expected log output, a troubleshooting table, and the list of things this smoke does **not** validate (real-world NAT traversal, daemon long-running stability, Windows IPC).

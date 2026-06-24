@@ -1,253 +1,188 @@
-"""Pre-sync config exchange between source and peer.
+"""Pre-sync folder-config exchange over an authenticated QUIC stream.
 
-Source and peer exchange their FoldersConfig bidirectionally.
-Both sides validate against circular sync conflicts before file transfer.
+After AUTH, source and peer exchange their FolderEntry for the folder being
+synced. Both sides validate for circular-sync conflicts. If the peer rejects
+the source's config, it sends an ERROR frame before closing so the source
+surfaces the real reason instead of a network error.
+
+Protocol (in order on the stream):
+  1. SOURCE  → CONFIG  (own FolderEntry)
+  2. PEER    → CONFIG  (own FolderEntry)  — or ERROR if validation fails
+  3. SOURCE  → CONFIG_ACK
 """
 
+from __future__ import annotations
+
 import asyncio
+import logging
+import struct
+from typing import TYPE_CHECKING
 
 import yaml
 
-from dsync.config.folder import FoldersConfig, SyncMode
-from dsync.network.errors import ConfigConflictError
-from dsync.network.p2p_core import (
-    async_recv_config,
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+from dsync.config.folder import FolderEntry, SyncMode
+from dsync.network.errors import ConfigConflictError, PeerAuthError
+from dsync.network.quic_core import (
+    MAX_CONFIG_SIZE,
+    MsgType,
     async_recv_config_ack,
     async_send_config,
     async_send_config_ack,
+    async_send_msg,
 )
-from dsync.network.sync_errors import (
-    ErrorCode,
-    SyncError,
-    notify_peer,
-)
+
+logger = logging.getLogger(__name__)
 
 
 class ConfigExchange:
-    """Abstracts pre-sync config exchange protocol.
+    """Bidirectional folder-config exchange with conflict detection.
 
-    Source (server) sends its FoldersConfig to peer (client) before transfer.
-    Peer receives config and acknowledges. No validation yet [1].
+    Both sides send their own ``FolderEntry`` and receive the peer's.
+    The PEER validates before sending its entry; on failure it sends an
+    ERROR frame so the SOURCE can surface a useful error message.
     """
 
-    def __init__(self, own_config: FoldersConfig, own_device_id: str):
-        """Initialize with own configuration.
+    def __init__(self, own_entry: FolderEntry, own_device_id: str) -> None:
+        """Store own folder entry and device id used in every exchange."""
+        self._own_entry = own_entry
+        self._own_device_id = own_device_id
 
-        Args:
-            own_config: This node's folder configuration.
-            own_device_id: This node's device ID (for peer to identify).
-        """
-        self.own_config = own_config
-        self.own_device_id = own_device_id
-
-    async def exchange_and_validate(
+    async def exchange_as_source(
         self,
         writer: asyncio.StreamWriter,
         reader: asyncio.StreamReader,
         peer_device_id: str,
-        is_source: bool,
-    ) -> FoldersConfig:
-        """Bidirectional config exchange with conflict validation.
-
-        Args:
-            writer: Stream writer to peer.
-            reader: Stream reader from peer.
-            peer_device_id: Verified device ID of the peer.
-            is_source: True if source initiates the sync, False if source receives.
+    ) -> FolderEntry:
+        """Source side: send own entry, receive peer's (or ERROR), validate, send ACK.
 
         Returns:
-            Peer's FoldersConfig.
+            The peer's ``FolderEntry`` for this folder.
 
         Raises:
-            ConfigConflictError: If both sides try to sync the same path as
-            BACKUP_TO_PEER, or both use MIRROR mode.
+            ConfigConflictError: Circular sync detected.
+            PeerAuthError: Peer rejected our config (message from peer included).
         """
-        if is_source:
-            # Source sends first, then receives peer config
-            await self._send_own_config(writer)
-            peer_config = await self._recv_peer_config(writer, reader)
-            try:
-                self._validate_no_circular_conflict(peer_device_id, peer_config)
-            except ConfigConflictError as exc:
-                await notify_peer(writer, self._conflict_to_sync_error(exc))
-                raise
-            await async_send_config_ack(writer)
-            print("[+] Config exchange completed (no conflicts)")
-            return peer_config
-        # Peer receives first, then sends own config
-        source_config = await self._recv_peer_config(writer, reader)
-        await self._send_own_config(writer)
-        try:
-            self._validate_no_circular_conflict(peer_device_id, source_config)
-        except ConfigConflictError as exc:
-            await notify_peer(writer, self._conflict_to_sync_error(exc))
-            raise
-        await async_recv_config_ack(reader)
-        print("[+] Config exchange completed (no conflicts)")
-        return source_config
-
-    @staticmethod
-    def _conflict_to_sync_error(exc: ConfigConflictError) -> SyncError:
-        """Map a :class:`ConfigConflictError` message to a :class:`SyncError`."""
-        text = str(exc)
-        if "Mirror conflict" in text:
-            return SyncError(code=ErrorCode.MIRROR_CONFLICT, message=text)
-        return SyncError(code=ErrorCode.BIDIRECTIONAL_CONFLICT, message=text)
-
-    async def _send_own_config(self, writer: asyncio.StreamWriter) -> None:
-        """Serialize and send own FoldersConfig."""
-        config_yaml = yaml.safe_dump(self.own_config.model_dump(mode="json")).encode("utf-8")
-        print(f"[*] Sending config to peer ({len(config_yaml)} bytes)...")
-        await async_send_config(writer, config_yaml)
-
-    async def _recv_peer_config(
-        self, writer: asyncio.StreamWriter, reader: asyncio.StreamReader
-    ) -> FoldersConfig:
-        """Receive and deserialize peer's FoldersConfig.
-
-        On bad YAML or schema-invalid payload we send an ERROR to the peer
-        so they see the same diagnosis we do.
-        """
-        print("[*] Receiving config from peer...")
-        config_yaml = await async_recv_config(reader)
-        print(f"[+] Received config ({len(config_yaml)} bytes)")
-        try:
-            config_dict = yaml.safe_load(config_yaml.decode("utf-8"))
-            return FoldersConfig.model_validate(config_dict or {})
-        except Exception as exc:
-            await notify_peer(
-                writer,
-                SyncError(
-                    code=ErrorCode.INVALID_CONFIG_PAYLOAD,
-                    message=f"Peer config could not be parsed: {exc}",
-                ),
-            )
-            raise
-
-    def _validate_no_circular_conflict(
-        self, peer_device_id: str, peer_config: FoldersConfig
-    ) -> None:
-        """Validate that no circular sync relationships exist.
-
-        Conflicts:
-        1. Both sides have same path as BACKUP_TO_PEER targeting each other
-        2. Both sides have same path as MIRROR
-
-        Valid:
-        - A: BACKUP_TO_PEER -> B, B: BACKUP_FROM_PEER <- A (correct backup setup)
-
-        Args:
-            peer_device_id: The device ID of the peer the source is communicating with.
-            peer_config: The peer's folder configuration.
-
-        Raises:
-            ConfigConflictError: If a circular sync relationship is detected.
-        """
-        # Get paths source syncs TO this peer
-        source_backup_to_peer = self._get_backup_to_peer_paths(self.own_config, peer_device_id)
-
-        # Get paths peer syncs TO source
-        peer_backup_to_source = self._get_backup_to_peer_paths(peer_config, self.own_device_id)
-
-        # Peer's MIRROR paths that include this peer
-        source_mirror_paths = self._get_mirror_paths(self.own_config, peer_device_id)
-
-        # Peer's MIRROR paths that include source
-        peer_mirror_paths = self._get_mirror_paths(peer_config, self.own_device_id)
-
-        # Find conflicts (same path synced bidirectionally)
-        backup_conflicts = source_backup_to_peer & peer_backup_to_source
-
-        if backup_conflicts:
-            raise ConfigConflictError(
-                f"Bidirectional backup conflict for paths {sorted(backup_conflicts)}: "
-                f"device '{self.own_device_id}' and device '{peer_device_id}' are both "
-                f"configured to backup-to-peer to each other. One of them must switch "
-                f"to 'backup-from-peer' instead."
-            )
-
-        # Check for MIRROR conflicts
-        mirror_conflicts = source_mirror_paths & peer_mirror_paths
-        if mirror_conflicts:
-            raise ConfigConflictError(
-                f"Mirror conflict for paths {sorted(mirror_conflicts)}: device "
-                f"'{self.own_device_id}' and device '{peer_device_id}' both configured "
-                f"MIRROR mode. This can cause sync loops; only one side should be MIRROR."
-            )
-
-    @staticmethod
-    def _get_backup_to_peer_paths(config: FoldersConfig, target_peer_id: str) -> set[str]:
-        """Extract source paths that are configured to sync to target_peer_id.
-
-        Args:
-            config: FoldersConfig to analyze.
-            target_peer_id: Device ID of the target peer.
-
-        Returns:
-            Set of absolute path strings that are synced to target_peer_id.
-        """
-        paths = set()
-
-        for entry in config.entries:
-            if entry.mode == SyncMode.BACKUP_TO_PEER and (
-                entry.devices is None or target_peer_id in entry.devices
-            ):
-                paths.add(str(entry.path))
-
-        return paths
-
-    @staticmethod
-    def _get_mirror_paths(config: FoldersConfig, peer_id: str) -> set[str]:
-        """Extract source paths that are configured as MIRROR that include peer_id.
-
-        Args:
-            config: FoldersConfig to analyze.
-            peer_id: Device ID of the peer.
-
-        Returns:
-            Set of absolute path strings in MIRROR mode with peer_id.
-        """
-        paths = set()
-
-        for entry in config.entries:
-            if entry.mode == SyncMode.MIRROR and (
-                entry.devices is None or peer_id in entry.devices
-            ):
-                paths.add(str(entry.path))
-
-        return paths
-
-
-class ConfigExchangeLegacy(ConfigExchange):
-    """Backwards-compatible wrapper for old unidirectional exchange."""
-
-    def __init__(self) -> None:
-        """Initialize legacy exchange without config (methods accept config as args)."""
-
-    async def exchange_as_source(
-        self,
-        reader: asyncio.StreamReader,
-        writer: asyncio.StreamWriter,
-        folders_config: FoldersConfig,
-    ) -> None:
-        """Legacy: Send config from source to peer (no validation)."""
-        config_yaml = yaml.safe_dump(folders_config.model_dump(mode="json")).encode("utf-8")
-        print(f"[*] Sending config to peer ({len(config_yaml)} bytes)...")
-        await async_send_config(writer, config_yaml)
-        await async_recv_config_ack(reader)
-        print("[+] Config acknowledged by peer")
+        await self._send_entry(writer)
+        peer_entry = await self._recv_entry_or_error(reader)
+        self._validate(peer_device_id, peer_entry)
+        await async_send_config_ack(writer)
+        logger.debug("config exchange ok (source, peer=%s)", peer_device_id)
+        return peer_entry
 
     async def exchange_as_peer(
         self,
-        reader: asyncio.StreamReader,
         writer: asyncio.StreamWriter,
-    ) -> FoldersConfig:
-        """Legacy: Receive config from source on peer side (no validation)."""
-        print("[*] Receiving config from source...")
-        config_yaml = await async_recv_config(reader)
-        print(f"[*] Received config ({len(config_yaml)} bytes)")
-        config_dict = yaml.safe_load(config_yaml.decode("utf-8"))
-        received_config = FoldersConfig.model_validate(config_dict or {})
-        await async_send_config_ack(writer)
-        print("[*] Config acknowledged")
-        return received_config
+        reader: asyncio.StreamReader,
+        source_device_id: str,
+        validate_fn: Callable[[FolderEntry, str], None] | None = None,
+    ) -> FolderEntry:
+        """Peer side: receive source entry, validate, send own entry, receive ACK.
+
+        Args:
+            writer: Authenticated stream writer to the source.
+            reader: Authenticated stream reader from the source.
+            source_device_id: Trusted device id of the connecting source.
+            validate_fn: Optional extra validation called with
+                ``(source_entry, source_device_id)`` after the circular-
+                conflict check. Raise :class:`PeerAuthError` or
+                :class:`ConfigConflictError` to reject; an ERROR frame
+                is sent to the source before re-raising.
+
+        Returns:
+            The source's ``FolderEntry`` for this folder.
+
+        Raises:
+            ConfigConflictError / PeerAuthError: Validation failed (ERROR
+                frame already sent to source before raising).
+        """
+        source_entry = await self._recv_entry(reader)
+        try:
+            self._validate(source_device_id, source_entry)
+            if validate_fn is not None:
+                validate_fn(source_entry, source_device_id)
+        except (ConfigConflictError, PeerAuthError) as exc:
+            await self._send_error(writer, str(exc))
+            raise
+        await self._send_entry(writer)
+        await async_recv_config_ack(reader)
+        logger.debug("config exchange ok (peer, source=%s)", source_device_id)
+        return source_entry
+
+    # ------------------------------------------------------------------ private
+
+    async def _send_entry(self, writer: asyncio.StreamWriter) -> None:
+        payload = yaml.safe_dump(self._own_entry.model_dump(mode="json")).encode("utf-8")
+        await async_send_config(writer, payload)
+
+    async def _recv_entry(self, reader: asyncio.StreamReader) -> FolderEntry:
+        from dsync.network.quic_core import async_recv_config
+
+        payload = await async_recv_config(reader)
+        data = yaml.safe_load(payload.decode("utf-8"))
+        return FolderEntry.model_validate(data or {})
+
+    async def _recv_entry_or_error(self, reader: asyncio.StreamReader) -> FolderEntry:
+        """Read next frame; if it's ERROR raise with peer's message; else parse as CONFIG."""
+        try:
+            header = await reader.readexactly(5)
+        except asyncio.IncompleteReadError as err:
+            raise RuntimeError("Connection closed during config exchange") from err
+
+        msg_type, length = struct.unpack("!BI", header)
+
+        if msg_type == MsgType.ERROR:
+            try:
+                body = await reader.readexactly(length)
+            except asyncio.IncompleteReadError as err:
+                raise RuntimeError("Connection closed reading error frame") from err
+            reason = body.decode("utf-8", errors="replace")
+            raise PeerAuthError(f"Peer rejected config: {reason}")
+
+        if msg_type != MsgType.CONFIG:
+            raise RuntimeError(
+                f"Expected CONFIG (type {MsgType.CONFIG}) or ERROR, got type {msg_type}"
+            )
+        if length > MAX_CONFIG_SIZE:
+            raise RuntimeError(
+                f"Config payload too large: {length} B exceeds limit of {MAX_CONFIG_SIZE} B"
+            )
+        try:
+            payload = await reader.readexactly(length)
+        except asyncio.IncompleteReadError as err:
+            raise RuntimeError("Connection lost during config reception") from err
+
+        data = yaml.safe_load(payload.decode("utf-8"))
+        return FolderEntry.model_validate(data or {})
+
+    async def _send_error(self, writer: asyncio.StreamWriter, reason: str) -> None:
+        await async_send_msg(writer, MsgType.ERROR, reason.encode("utf-8"))
+
+    def _validate(self, peer_device_id: str, peer_entry: FolderEntry) -> None:
+        """Detect circular-sync conflicts between own and peer entry."""
+        own_sends_to_peer = self._own_entry.mode == SyncMode.BACKUP_TO_PEER and (
+            self._own_entry.devices is None or peer_device_id in self._own_entry.devices
+        )
+        peer_sends_to_own = peer_entry.mode == SyncMode.BACKUP_TO_PEER and (
+            peer_entry.devices is None or self._own_device_id in peer_entry.devices
+        )
+        if own_sends_to_peer and peer_sends_to_own:
+            raise ConfigConflictError(
+                f"Bidirectional backup conflict on '{self._own_entry.id}': both sides "
+                "configured as backup-to-peer targeting each other. One side must use "
+                "backup-from-peer."
+            )
+
+        own_mirror = self._own_entry.mode == SyncMode.MIRROR and (
+            self._own_entry.devices is None or peer_device_id in self._own_entry.devices
+        )
+        peer_mirror = peer_entry.mode == SyncMode.MIRROR and (
+            peer_entry.devices is None or self._own_device_id in peer_entry.devices
+        )
+        if own_mirror and peer_mirror and self._own_entry.id == peer_entry.id:
+            raise ConfigConflictError(
+                f"Mirror conflict on '{self._own_entry.id}': both sides configured as "
+                "mirror. This can cause sync loops."
+            )

@@ -7,7 +7,7 @@ import typer  # noqa: TC002
 from dsync.cli.console import success
 
 
-def list(ctx: typer.Context) -> None:  # noqa: A001
+def list(ctx: typer.Context) -> None:
     """List all configured folders."""
     entries = ctx.obj.folders.entries
 

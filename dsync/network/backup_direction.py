@@ -25,9 +25,15 @@ from __future__ import annotations
 
 import asyncio
 from enum import Enum
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from dsync.network.file_transfer import recv_file, send_file
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+    from pathlib import Path
+
+    from aioquic.quic.connection import QuicConnection
 
 
 class TransferRole(Enum):
@@ -64,10 +70,12 @@ class BackupSession:
     """
 
     def __init__(self, role: TransferRole) -> None:
+        """Initialize with the given transfer role."""
         self._role = role
 
     @property
     def role(self) -> TransferRole:
+        """Return the transfer role for this session."""
         return self._role
 
     @classmethod
@@ -81,9 +89,25 @@ class BackupSession:
         return cls(TransferRole.PEER)
 
     async def send_files(
-        self, writer: asyncio.StreamWriter, files: tuple[Path, ...], root: Path
+        self,
+        writer: asyncio.StreamWriter,
+        reader: asyncio.StreamReader,
+        files: tuple[Path, ...],
+        root: Path,
+        quic: QuicConnection | None = None,
+        on_progress: Callable[[str, int, int], Awaitable[None]] | None = None,
     ) -> None:
         """Send ``files`` to the peer with paths relativized against ``root``.
+
+        Args:
+            writer: Authenticated asyncio stream from the connection setup.
+            reader: Authenticated asyncio stream from the connection setup.
+            files: Source files to transmit.
+            root: Folder root the paths should be relativized against.
+            quic: Underlying QUIC connection, forwarded to ``send_file`` to
+                pace the transfer to real network delivery.
+            on_progress: Optional async progress callback forwarded to
+                ``send_file`` for each file.
 
         Raises:
             DirectionViolationError: If this session is not the SOURCE.
@@ -95,9 +119,11 @@ class BackupSession:
                 "only the source may send (source → peer is the only legal direction)."
             )
         for src in files:
-            await send_file(writer, src, root)
+            await send_file(writer, reader, src, root, quic, on_progress)
 
-    async def receive_files(self, reader: asyncio.StreamReader, recv_dir: Path) -> None:
+    async def receive_files(
+        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter, recv_dir: Path
+    ) -> None:
         """Receive files from the source into ``recv_dir`` until EOF.
 
         Raises:
@@ -111,7 +137,7 @@ class BackupSession:
             )
         while True:
             try:
-                await recv_file(reader, recv_dir)
+                await recv_file(reader, writer, recv_dir)
             except asyncio.IncompleteReadError as e:
                 if e.partial:
                     raise

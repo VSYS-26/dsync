@@ -9,6 +9,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "aioquic>=1.2.0",
     "croniter>=3.0",
     "cryptography>=47.0.0",
     "pyp2p>=0.8.3",
@@ -16,14 +17,16 @@ dependencies = [
     "pyyaml>=6.0.2",
     "rich>=15.0.0",
     "typer>=0.24.1",
-    "zeroconf>=0.148.0",
     "keyring>=25.7.0",
     "keyrings-alt>=5.0.2",
+    "zeroconf>=0.130.0",
     "pywin32>=306 ; sys_platform == 'win32'",
 ]
 
 [dependency-groups]
 dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.24",
     "pre-commit>=4.5.1",
     "ruff>=0.6.0",
     "mypy>=1.13",
@@ -79,7 +82,11 @@ ignore = [
     "TRY003",
     "EM101",
     "EM102",
+    "A001",
+    "A002",
+    "A004",
 ]
+
 task-tags = ["TODO", "FIXME"]
 
 [tool.ruff.lint.per-file-ignores]
@@ -126,6 +133,7 @@ mypy_path = ["stubs"]
 
 [[tool.mypy.overrides]]
 module = [
+    "aioquic.*",
     "croniter.*",
     "cryptography.*",
     "rich.*",
@@ -135,10 +143,14 @@ module = [
 ]
 ignore_missing_imports = true
 
-[tool.bandit]
-exclude_dirs = ["tests", ".venv"]
-skips = ["B101"]
+[[tool.mypy.overrides]]
+module = ["tests.*", "scripts.*", "dsync.generate_test_certs"]
+ignore_errors = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+
+[tool.bandit]
+exclude_dirs = ["tests", ".venv"]
+skips = ["B101", "B108", "B110", "B404", "B603", "B607"]

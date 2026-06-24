@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 def add(
     ctx: typer.Context,
-    id: Annotated[str, typer.Argument(help="Unique folder id")],  # noqa: A002
+    id: Annotated[str, typer.Argument(help="Unique folder id")],
     path: Annotated[Path, typer.Argument(help="Folder path")],
     mode: Annotated[SyncMode, typer.Option(help="Sync mode")],
     devices: Annotated[

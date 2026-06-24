@@ -59,9 +59,7 @@ def welcome(role: str, *, port: int | None = None, host: str | None = None) -> N
         lines.append(f"[info]Host:[/info] {host}")
     if port is not None:
         lines.append(f"[info]Port:[/info] {port}")
-    console.print(
-        Panel.fit("\n".join(lines), title="dsync starting", border_style="success")
-    )
+    console.print(Panel.fit("\n".join(lines), title="dsync starting", border_style="success"))
     print_help()
 
 

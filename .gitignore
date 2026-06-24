@@ -214,3 +214,6 @@ __marimo__/
 
 # dsync runtime artifacts
 received-files/
+
+# Personal Claude Code instructions (per-user, not shared)
+CLAUDE.local.md

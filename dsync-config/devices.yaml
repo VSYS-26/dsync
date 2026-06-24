@@ -1,14 +1,17 @@
 # Trusted-devices configuration.
 # The entries below are EXAMPLES only - uncomment and edit them to register
-# real trusted peer devices. Each entry needs a unique id and the
-# fingerprint of the peer's public key. Both fields must be unique across
-# all entries.
+# real trusted peer devices. Each entry needs a unique id, the fingerprint
+# of the peer's public key, and the id of a relay (from relays.yaml) that
+# the peer is reachable through. id and fingerprint must be unique across
+# all entries; relay_id must refer to an existing entry in relays.yaml.
 
 # trusted_devices:
-#   # Example: another user's laptop.
+#   # Example: another user's laptop, reachable via the EU relay.
 #   - id: laptop-anna
 #     fingerprint: <fingerprint-of-annas-laptop>
+#     relay_id: relay-eu
 
-#   # Example: a home-lab backup server.
+#   # Example: a home-lab backup server on the same EU relay.
 #   - id: server-basement
 #     fingerprint: <fingerprint-of-basement-server>
+#     relay_id: relay-eu

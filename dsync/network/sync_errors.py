@@ -19,18 +19,19 @@ without depending on the human-readable message.
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import TYPE_CHECKING
 
 import yaml
 
 if TYPE_CHECKING:
-    from dsync.network.p2p_core import MsgType as _MsgType  # noqa: F401
+    import asyncio
+
+    from dsync.network.quic_core import MsgType as _MsgType  # noqa: F401
 
 
-class ErrorCategory(str, Enum):
+class ErrorCategory(StrEnum):
     """High-level grouping of sync failures shown to the user."""
 
     AUTH = "auth"
@@ -41,7 +42,7 @@ class ErrorCategory(str, Enum):
     INTERNAL = "internal"
 
 
-class ErrorCode(str, Enum):
+class ErrorCode(StrEnum):
     """Stable identifier for a specific failure mode."""
 
     # AUTH
@@ -127,15 +128,20 @@ class SyncError:
         return f"[{self.category.value}:{self.code.value}] {self.message}"
 
 
+_MAX_ERROR_SIZE = 4 * 1024
+
+
 async def notify_peer(writer: asyncio.StreamWriter, error: SyncError) -> None:
-    """Best-effort send of an ERROR frame to the peer.
+    """Best-effort send of an ERROR frame to the peer."""
+    from dsync.network.quic_core import MsgType, async_send_msg
 
-    Imports :func:`async_send_error` locally to keep ``sync_errors`` free of
-    a hard p2p_core dependency at module load.
-    """
-    from dsync.network.p2p_core import async_send_error
-
-    await async_send_error(writer, error.to_yaml())
+    payload = error.to_yaml()
+    if len(payload) > _MAX_ERROR_SIZE:
+        payload = payload[:_MAX_ERROR_SIZE]
+    try:
+        await async_send_msg(writer, MsgType.ERROR, payload)
+    except (ConnectionError, OSError):
+        return
 
 
 class PeerReportedError(Exception):

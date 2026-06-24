@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from dsync.config import DaemonConfig, DevicesConfig, FoldersConfig
+from dsync.config import DaemonConfig, DevicesConfig, FoldersConfig, RelaysConfig
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -24,7 +24,8 @@ class AppState:
     config_dir: Path
     folders: FoldersConfig
     devices: DevicesConfig
-    daemon: DaemonConfig
+    relays: RelaysConfig = field(default_factory=RelaysConfig)
+    daemon: DaemonConfig = field(default_factory=DaemonConfig)
 
     @classmethod
     def load(cls, config_dir: Path) -> AppState:
@@ -46,7 +47,16 @@ class AppState:
         """
         folders = FoldersConfig.load(config_dir)
         devices = DevicesConfig.load(config_dir)
+        relays = RelaysConfig.load(config_dir)
         daemon = DaemonConfig.load(config_dir)
+
+        relay_ids = {r.id for r in relays.relays}
+        for device in devices.trusted_devices:
+            if device.relay_id is not None and device.relay_id not in relay_ids:
+                raise ValueError(
+                    f"Device {device.id} references relay_id '{device.relay_id}' "
+                    "which is not listed in relays.yaml"
+                )
 
         trusted_device_ids = [dev.id for dev in devices.trusted_devices]
         resolved_entries = []
@@ -63,4 +73,6 @@ class AppState:
                 resolved_entries.append(entry)
         folders.entries = resolved_entries
 
-        return cls(config_dir=config_dir, folders=folders, devices=devices, daemon=daemon)
+        return cls(
+            config_dir=config_dir, folders=folders, devices=devices, relays=relays, daemon=daemon
+        )

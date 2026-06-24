@@ -6,7 +6,7 @@ from typing import Annotated
 import typer
 
 from dsync.cli.console import error, info, warn
-from dsync.config import DevicesConfig, FoldersConfig
+from dsync.config import DevicesConfig, FoldersConfig, RelaysConfig
 from dsync.state import AppState
 
 DEFAULT_CONFIG_DIR = Path("./dsync-config")
@@ -19,17 +19,21 @@ def config_dir(
         typer.Option(
             "--config-dir",
             "-c",
-            help="Directory containing folders.yaml and devices.yaml.",
+            help="Directory containing folders.yaml, devices.yaml and relays.yaml.",
         ),
     ] = DEFAULT_CONFIG_DIR,
 ) -> None:
-    """Load folder and device configs into the Typer AppState context."""
+    """Load folder, device and relay configs into the Typer AppState context."""
     if not directory.exists():
         warn(f"config directory {directory} does not exist, starting empty")
     elif not directory.is_dir():
         raise typer.BadParameter(f"{directory} exists but is not a directory")
     else:
-        for filename in (FoldersConfig.FILENAME, DevicesConfig.FILENAME):
+        for filename in (
+            FoldersConfig.FILENAME,
+            DevicesConfig.FILENAME,
+            RelaysConfig.FILENAME,
+        ):
             if not (directory / filename).is_file():
                 warn(f"{directory / filename} does not exist, starting empty")
 
@@ -41,7 +45,9 @@ def config_dir(
 
     info(
         f"loaded config from {directory}: "
-        f"{len(state.folders.entries)} folders, {len(state.devices.trusted_devices)} devices"
+        f"{len(state.folders.entries)} folders, "
+        f"{len(state.devices.trusted_devices)} devices, "
+        f"{len(state.relays.relays)} relays"
     )
 
     ctx.obj = state

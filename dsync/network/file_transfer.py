@@ -1,4 +1,6 @@
-"""Async file transfer over an authenticated asyncio TLS stream."""
+"""Async file transfer over an authenticated QUIC stream."""
+
+from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
@@ -6,6 +8,7 @@ import hashlib
 import logging
 from pathlib import Path, PurePosixPath
 import tempfile
+from typing import TYPE_CHECKING
 import zipfile
 
 from rich.console import Console
@@ -20,21 +23,32 @@ from rich.progress import (
 )
 import yaml
 
-from dsync.config import FolderEntry
 from dsync.integrity import compute_sha256
 from dsync.network.errors import (
     ChunkValidationError,
     FrameValidationError,
     TransferIntegrityError,
 )
-from dsync.network.index_diff import RenamePair
-from dsync.network.p2p_core import MsgType, async_recv_msg, async_send_msg
+from dsync.network.quic_core import (
+    MsgType,
+    async_recv_msg,
+    async_send_msg,
+    await_stream_capacity,
+)
 from dsync.network.sync_errors import (
     ErrorCode,
     PeerReportedError,
     SyncError,
     notify_peer,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
+    from aioquic.quic.connection import QuicConnection
+
+    from dsync.config import FolderEntry
+    from dsync.network.index_diff import RenamePair
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +57,10 @@ _progress_console = Console(stderr=True)
 DEFAULT_CHUNK_SIZE = 64 * 1024
 MAX_META_SIZE = 8 * 1024
 MAX_CHUNK_SIZE = DEFAULT_CHUNK_SIZE
+
+#: Throttle for ``send_file``'s ``on_progress`` callback: emit at most one
+#: update per this many bytes sent (plus a final update at completion).
+_PROGRESS_EMIT_BYTES = 512 * 1024
 
 
 def _transfer_progress() -> Progress:
@@ -77,7 +95,7 @@ class FileMeta:
     sha256: str
 
     @classmethod
-    def from_yaml(cls, data: bytes) -> "FileMeta":
+    def from_yaml(cls, data: bytes) -> FileMeta:
         """Parse a YAML-encoded meta payload into a ``FileMeta`` instance."""
         raw = yaml.safe_load(data.decode("utf-8"))
         return cls(path=raw["path"], size=raw["size"], sha256=raw["sha256"])
@@ -148,7 +166,12 @@ async def _recv_frame(reader: asyncio.StreamReader) -> tuple[MsgType, bytes]:
 
 
 async def send_file(
-    writer: asyncio.StreamWriter, reader: asyncio.StreamReader, path: Path, root: Path
+    writer: asyncio.StreamWriter,
+    reader: asyncio.StreamReader,
+    path: Path,
+    root: Path,
+    quic: QuicConnection | None = None,
+    on_progress: Callable[[str, int, int], Awaitable[None]] | None = None,
 ) -> None:
     """Send one file over an open asyncio TLS stream in chunks.
 
@@ -162,6 +185,14 @@ async def send_file(
         reader: Authenticated asyncio stream from the connection setup.
         path: Source file to transmit.
         root: Folder root the path should be relativized against.
+        quic: Underlying QUIC connection. When given, the send loop is paced
+            to real network delivery so the progress bar tracks transmission
+            and the whole file is not buffered in memory at once. When
+            ``None`` the loop runs unpaced (legacy behavior).
+        on_progress: Optional async callback invoked as
+            ``on_progress(name, transferred, total)`` while sending, throttled
+            to roughly every ``_PROGRESS_EMIT_BYTES``. Used to forward progress
+            to a remote watcher (e.g. the ``dsync run`` CLI over IPC).
 
     Raises:
         FileNotFoundError: If ``path`` does not exist or is not a regular file.
@@ -176,12 +207,26 @@ async def send_file(
     meta = FileMeta(path=rel.as_posix(), size=path.stat().st_size, sha256=digest)
     await async_send_msg(writer, MsgType.FILE_META, meta.to_yaml())
 
+    stream_id = writer.get_extra_info("stream_id")
+    sent = 0
+    last_emit = 0
     try:
         with path.open("rb") as f, _transfer_progress() as progress:
             task_id = progress.add_task(f"Sending {path.name}", total=meta.size)
             while chunk := await asyncio.to_thread(f.read, DEFAULT_CHUNK_SIZE):
                 await async_send_msg(writer, MsgType.FILE_CHUNK, chunk)
+                sent += len(chunk)
                 progress.update(task_id, advance=len(chunk))
+                if quic is not None and stream_id is not None:
+                    await await_stream_capacity(quic, stream_id)
+                if on_progress is not None and (
+                    sent - last_emit >= _PROGRESS_EMIT_BYTES or sent >= meta.size
+                ):
+                    last_emit = sent
+                    await on_progress(path.name, sent, meta.size)
+            if quic is not None and stream_id is not None:
+                # Drain the last bytes so the bar reaches 100% before it clears.
+                await await_stream_capacity(quic, stream_id, high_water=0)
     except (ConnectionError, BrokenPipeError):
         # Receiver likely aborted with an ERROR frame and closed before we
         # finished sending. Try one short read so we can surface its reason

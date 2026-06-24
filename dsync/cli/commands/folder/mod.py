@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 def mod(
     ctx: typer.Context,
-    id: Annotated[str, typer.Argument(help="Unique folder id")],  # noqa: A002
+    id: Annotated[str, typer.Argument(help="Unique folder id")],
     path: Annotated[Path | None, typer.Option("--path", "-p", help="Folder path")] = None,
     mode: Annotated[SyncMode | None, typer.Option("--mode", help="Sync mode")] = None,
     devices: Annotated[

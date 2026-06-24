@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import typer
+import typer  # noqa: TC002
 
 from dsync.cli.console import success
 
@@ -18,6 +18,7 @@ def list(ctx: typer.Context) -> None:
     lines = ["Currently Trusted Devices:"]
     for e in devices:
         lines.append(f"    • {e.id}")
-        lines.append(f"      fingerprint:    {e.fingerprint}")
+        lines.append(f"      fingerprint: {e.fingerprint}")
+        lines.append(f"      relay_id:    {e.relay_id}")
 
     success("\n".join(lines))

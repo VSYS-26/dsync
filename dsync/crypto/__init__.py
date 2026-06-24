@@ -6,18 +6,18 @@ from .keys import (
     FingerprintFormat,
     default_key_paths,
     generate_keypair,
+    is_valid_fingerprint,
     load_keypair,
     public_key_fingerprint,
     save_keypair,
-    is_valid_fingerprint,
 )
 
 __all__ = [
     "FingerprintFormat",
     "default_key_paths",
     "generate_keypair",
+    "is_valid_fingerprint",
     "load_keypair",
     "public_key_fingerprint",
     "save_keypair",
-    "is_valid_fingerprint",
 ]

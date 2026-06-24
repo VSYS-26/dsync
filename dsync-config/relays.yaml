@@ -1,0 +1,22 @@
+# Relay-server configuration.
+# Relays act as pure rendezvous points: they help two peers behind NATs
+# establish a direct QUIC connection via UDP hole-punching. Relays NEVER
+# see file bytes - all file traffic flows peer-to-peer.
+#
+# The entries below are EXAMPLES only - uncomment and edit them to register
+# real relays. Each entry needs a unique id, host:port, and the fingerprint
+# of the relay's public key (pinned for trust). Both id and fingerprint
+# must be unique across all entries.
+
+# relays:
+#   # Example: a relay on a small VPS.
+#   - id: relay-eu
+#     host: relay.example.org
+#     port: 9000
+#     fingerprint: <fingerprint-of-relay-public-key>
+
+#   # Example: a second relay for redundancy / regional routing.
+#   - id: relay-us
+#     host: relay-us.example.org
+#     port: 9000
+#     fingerprint: <fingerprint-of-us-relay-public-key>
