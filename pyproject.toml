@@ -32,6 +32,9 @@ dev = [
     "mypy>=1.13",
     "bandit>=1.8",
     "pyinstaller>=6.11",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "types-pyyaml>=6.0.12.20260518",
 ]
 
 [project.scripts]
@@ -87,13 +90,8 @@ ignore = [
 task-tags = ["TODO", "FIXME"]
 
 [tool.ruff.lint.per-file-ignores]
-"dsync/generate_test_certs.py" = ["PTH100", "PTH118", "PTH120", "E402"]
-"dsync/network/relay_client.py" = ["TRY301", "TRY004"]
-"dsync/network/relay_daemon.py" = ["RUF003"]
-"dsync/network/relay_protocol.py" = ["RUF003"]
-"dsync/network/peer_auth.py" = ["TRY004"]
-"scripts/smoke_setup.py" = ["D103"]
-"tests/**" = ["ARG001", "D103", "D205", "F821", "RUF003"]
+# Test names are self-documenting; docstrings on every test add only noise.
+"tests/**" = ["D100", "D101", "D103"]
 
 [tool.ruff.lint.isort]
 force-sort-within-sections = true
@@ -155,4 +153,4 @@ asyncio_mode = "auto"
 
 [tool.bandit]
 exclude_dirs = ["tests", ".venv"]
-skips = ["B101", "B108", "B404", "B603", "B607", "B110"]
+skips = ["B101", "B108", "B110", "B404", "B603", "B607"]
