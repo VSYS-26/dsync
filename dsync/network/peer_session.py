@@ -18,7 +18,10 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from dsync.config import FolderEntry
 from dsync.network.backup_direction import BackupSession, TransferRole
+from dsync.network.config_exchange import ConfigExchange
+from dsync.network.config_validation import validate_peer_folder_config
 from dsync.network.errors import PeerAuthError
 from dsync.network.peer_auth import (
     extract_spki,
@@ -36,14 +39,12 @@ from dsync.network.quic_core import (
     async_send_msg,
     get_quic_channel_binding,
 )
+from dsync.state import AppState
 
 if TYPE_CHECKING:
     import asyncio
 
     from aioquic.quic.connection import QuicConnection
-
-    from dsync.config import FolderEntry
-    from dsync.state import AppState
 
 logger = logging.getLogger(__name__)
 
@@ -186,10 +187,13 @@ class PeerSession:
             reader, writer, quic_connection, expected_peer_fingerprint
         )
 
+        own_id = self._trusted_by_fp.get(self._own_fingerprint, self._own_fingerprint)
         backup = BackupSession(self._role)
         if self._role is TransferRole.SOURCE:
             assert self._folder is not None  # checked in __init__
             await async_send_msg(writer, MsgType.FOLDER_ID, self._folder.id.encode())
+            exchange = ConfigExchange(own_entry=self._folder, own_device_id=own_id)
+            await exchange.exchange_as_source(writer, reader, peer_id)
             files = _enumerate_folder_files(self._folder)
             logger.info("source sending %d file(s) to %s", len(files), peer_id)
             await backup.send_files(writer, reader, files, Path(self._folder.path))
@@ -207,6 +211,15 @@ class PeerSession:
             folder_id = folder_id_bytes.decode() if folder_id_bytes else ""
             dest_root = _resolve_recv_dir(self._state, folder_id, self._recv_dir, peer_id)
             dest_root.mkdir(parents=True, exist_ok=True)
+            local_entry = _find_local_entry(self._state, folder_id)
+            if local_entry is not None:
+                exchange = ConfigExchange(own_entry=local_entry, own_device_id=own_id)
+                source_entry = await exchange.exchange_as_peer(writer, reader, peer_id)
+                validate_peer_folder_config(local_entry, source_entry, peer_id)
+            else:
+                # No local config for this folder — complete protocol, accept blindly.
+                exchange = _make_noop_exchange(folder_id)
+                await exchange.exchange_as_peer(writer, reader, peer_id)
             logger.info("peer receiving files from %s into %s", peer_id, dest_root)
             await backup.receive_files(reader, writer, dest_root)
             # Signal back to the source that all chunks have been processed.
@@ -252,6 +265,28 @@ class PeerSession:
             raise PeerAuthError(f"Refusing path-unsafe peer id: {peer_id!r}")
         logger.info("verified peer %s (fp=%s)", peer_id, peer_fp)
         return peer_id
+
+
+def _find_local_entry(state: AppState, folder_id: str) -> FolderEntry | None:
+    return next((e for e in state.folders.entries if e.id == folder_id), None)
+
+
+def _make_noop_exchange(folder_id: str) -> ConfigExchange:
+    """Return a ConfigExchange that sends a minimal placeholder entry.
+
+    Used when no local config exists for the incoming folder: we still need
+    to complete the protocol handshake so the source doesn't hang.
+    """
+    from dsync.config import SyncMode
+
+    placeholder = FolderEntry(
+        id=folder_id,
+        path="/dev/null",
+        mode=SyncMode.BACKUP_FROM_PEER,
+        devices=None,
+        recursive=False,
+    )
+    return ConfigExchange(own_entry=placeholder, own_device_id="")
 
 
 def _resolve_recv_dir(
