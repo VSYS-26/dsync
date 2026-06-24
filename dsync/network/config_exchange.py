@@ -14,11 +14,14 @@ Protocol (in order on the stream):
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
 import logging
 import struct
+from typing import TYPE_CHECKING
 
 import yaml
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 from dsync.config.folder import FolderEntry, SyncMode
 from dsync.network.errors import ConfigConflictError, PeerAuthError
@@ -43,6 +46,7 @@ class ConfigExchange:
     """
 
     def __init__(self, own_entry: FolderEntry, own_device_id: str) -> None:
+        """Store own folder entry and device id used in every exchange."""
         self._own_entry = own_entry
         self._own_device_id = own_device_id
 
@@ -78,6 +82,9 @@ class ConfigExchange:
         """Peer side: receive source entry, validate, send own entry, receive ACK.
 
         Args:
+            writer: Authenticated stream writer to the source.
+            reader: Authenticated stream reader from the source.
+            source_device_id: Trusted device id of the connecting source.
             validate_fn: Optional extra validation called with
                 ``(source_entry, source_device_id)`` after the circular-
                 conflict check. Raise :class:`PeerAuthError` or

@@ -18,8 +18,12 @@ from dsync.network.errors import (
     TransferIntegrityError,
 )
 from dsync.network.quic_core import MsgType, async_recv_msg, async_send_msg
-
-logger = logging.getLogger(__name__)
+from dsync.network.sync_errors import (
+    ErrorCode,
+    PeerReportedError,
+    SyncError,
+    notify_peer,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +103,10 @@ async def _recv_frame(reader: asyncio.StreamReader) -> tuple[MsgType, bytes]:
         msg = "Unknown frame type"
         raise FrameValidationError(msg) from exc
 
+    if msg_type == MsgType.ERROR:
+        # Peer is aborting the transfer and told us why — surface verbatim.
+        raise PeerReportedError(SyncError.from_yaml(payload))
+
     if msg_type == MsgType.FILE_META:
         max_len = MAX_META_SIZE
     elif msg_type == MsgType.FILE_CHUNK:
@@ -142,14 +150,28 @@ async def send_file(
     meta = FileMeta(path=rel.as_posix(), size=path.stat().st_size, sha256=digest)
     await async_send_msg(writer, MsgType.FILE_META, meta.to_yaml())
 
-    with path.open("rb") as f:
-        while chunk := await asyncio.to_thread(f.read, DEFAULT_CHUNK_SIZE):
-            await async_send_msg(writer, MsgType.FILE_CHUNK, chunk)
+    try:
+        with path.open("rb") as f:
+            while chunk := await asyncio.to_thread(f.read, DEFAULT_CHUNK_SIZE):
+                await async_send_msg(writer, MsgType.FILE_CHUNK, chunk)
+    except (ConnectionError, BrokenPipeError):
+        # Receiver likely aborted with an ERROR frame and closed before we
+        # finished sending. Try one short read so we can surface its reason
+        # instead of a generic "connection reset".
+        try:
+            mt, payload = await asyncio.wait_for(async_recv_msg(reader), timeout=2.0)
+            if mt == MsgType.ERROR and payload is not None:
+                raise PeerReportedError(SyncError.from_yaml(payload)) from None
+        except (TimeoutError, ConnectionError, asyncio.IncompleteReadError):
+            pass
+        raise
 
     msg_type, peer_hash_bytes = await async_recv_msg(reader)
     if msg_type is None or peer_hash_bytes is None:
         msg = "Connection closed before receiving peer hash verification"
         raise TransferIntegrityError(msg)
+    if msg_type == MsgType.ERROR:
+        raise PeerReportedError(SyncError.from_yaml(peer_hash_bytes))
     if msg_type != MsgType.FILE_VERIFY:
         msg = f"Expected FILE_VERIFY (type {MsgType.FILE_VERIFY}), got type {msg_type}"
         raise TransferIntegrityError(msg)
@@ -201,6 +223,68 @@ async def _recv_and_verify_chunks(
     return computed_hash
 
 
+async def _recv_file_body(
+    reader: asyncio.StreamReader, writer: asyncio.StreamWriter, dest_root: Path
+) -> tuple[Path, str]:
+    """Receive a file but do NOT send FILE_VERIFY; return (path, computed_hash).
+
+    Lets the caller perform extra validation (e.g. zip check) before
+    acknowledging — so an ERROR frame sent after that validation still
+    arrives at the sender ahead of the FILE_VERIFY ack.
+    """
+    msg_type, data = await _recv_frame(reader)
+    if msg_type != MsgType.FILE_META:
+        msg = "Missing file meta frame"
+        raise TransferIntegrityError(msg)
+    meta = FileMeta.from_yaml(data)
+
+    try:
+        target = _safe_resolve_under(dest_root, meta.path)
+    except TransferIntegrityError as exc:
+        await notify_peer(
+            writer,
+            SyncError(code=ErrorCode.PATH_TRAVERSAL, message=f"{exc} (path={meta.path!r})"),
+        )
+        raise
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        computed_hash = await _recv_and_verify_chunks(reader, target, meta)
+    except PeerReportedError:
+        target.unlink(missing_ok=True)
+        raise
+    except TransferIntegrityError as exc:
+        target.unlink(missing_ok=True)
+        await notify_peer(writer, SyncError(code=ErrorCode.HASH_MISMATCH, message=str(exc)))
+        raise
+    except ChunkValidationError as exc:
+        target.unlink(missing_ok=True)
+        code = ErrorCode.EMPTY_CHUNK if "empty" in str(exc).lower() else ErrorCode.CHUNK_OVERRUN
+        await notify_peer(writer, SyncError(code=code, message=str(exc)))
+        raise
+    except PermissionError as exc:
+        target.unlink(missing_ok=True)
+        await notify_peer(
+            writer,
+            SyncError(code=ErrorCode.PERMISSION_DENIED, message=f"receiver cannot write: {exc}"),
+        )
+        raise
+    except OSError as exc:
+        target.unlink(missing_ok=True)
+        code = (
+            ErrorCode.DISK_FULL
+            if getattr(exc, "errno", None) == 28
+            else ErrorCode.PERMISSION_DENIED
+        )
+        await notify_peer(writer, SyncError(code=code, message=str(exc)))
+        raise
+    except BaseException:
+        target.unlink(missing_ok=True)
+        raise
+
+    return target.resolve(), computed_hash
+
+
 async def recv_file(
     reader: asyncio.StreamReader, writer: asyncio.StreamWriter, dest_root: Path
 ) -> Path:
@@ -226,23 +310,9 @@ async def recv_file(
             tries to escape ``dest_root``, or the SHA-256 digest of the
             received bytes does not match ``meta.sha256``.
     """
-    msg_type, data = await _recv_frame(reader)
-    if msg_type != MsgType.FILE_META:
-        msg = "Missing file meta frame"
-        raise TransferIntegrityError(msg)
-    meta = FileMeta.from_yaml(data)
-
-    target = _safe_resolve_under(dest_root, meta.path)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        computed_hash = await _recv_and_verify_chunks(reader, target, meta)
-
-        await async_send_msg(writer, MsgType.FILE_VERIFY, computed_hash.encode("utf-8"))
-    except BaseException:
-        target.unlink(missing_ok=True)
-        raise
-
-    return target.resolve()
+    target, computed_hash = await _recv_file_body(reader, writer, dest_root)
+    await async_send_msg(writer, MsgType.FILE_VERIFY, computed_hash.encode("utf-8"))
+    return target
 
 
 async def send_path_as_zip(
@@ -253,6 +323,13 @@ async def send_path_as_zip(
     """Pack entry.path (file or folder) into a temp zip and send it."""
     src = Path(entry.path)
     if not src.exists():
+        await notify_peer(
+            writer,
+            SyncError(
+                code=ErrorCode.SOURCE_MISSING,
+                message=f"Source path does not exist on sender: {src}",
+            ),
+        )
         raise FileNotFoundError(f"Source not found: {src}")
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -287,10 +364,21 @@ async def recv_folder_and_extract(
     """Receive a zip file and extract it into dest_root."""
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir_path = Path(tmpdir)
-        zip_path = await recv_file(reader, writer, tmpdir_path)
+        zip_path, computed_hash = await _recv_file_body(reader, writer, tmpdir_path)
 
         if not zipfile.is_zipfile(zip_path):
+            # Send ERROR *before* FILE_VERIFY so the sender, which is still
+            # waiting on its post-chunk recv, actually reads our reason.
+            await notify_peer(
+                writer,
+                SyncError(
+                    code=ErrorCode.BAD_ZIP,
+                    message="Received file is not a valid zip archive",
+                ),
+            )
             raise TransferIntegrityError("Received file is not a valid zip archive")
+
+        await async_send_msg(writer, MsgType.FILE_VERIFY, computed_hash.encode("utf-8"))
 
         def _extract() -> None:
             with zipfile.ZipFile(zip_path, "r") as zf:
