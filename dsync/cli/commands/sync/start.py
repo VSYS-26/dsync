@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Annotated
 
 import typer
 
-from dsync.cli.console import error, info, success, warn
+from dsync.cli.console import error, info, success, warn, welcome
 from dsync.network.discovery import FingerprintAnnouncer, PeerDiscoveryRunner
 from dsync.network.peer_session import PeerSession
 from dsync.network.quic_core import build_quic_configuration
@@ -54,6 +54,7 @@ def start_p2p_sync(
     """
     state: AppState = ctx.obj
     is_server = mode.lower() == "server"
+    welcome(role="server (receiver)" if is_server else "client (sender)", port=port, host=host)
 
     if is_server:
         announcer = None
@@ -82,7 +83,13 @@ def start_p2p_sync(
         if folder is None:
             error("--folder-id required in client mode (or no matching folder found)")
             raise typer.Exit(code=1)
-        peer_ip = host or _discover_peer_by_id(state, peer, cert, key)
+        info(f"Client mode: syncing folder '{folder.id}'")
+        # Auto-infer target peer from folder config if --peer not given
+        peer_device_id = peer
+        if peer_device_id is None and folder.devices:
+            peer_device_id = folder.devices[0]
+            info(f"Auto-inferred peer device '{peer_device_id}' from folder config")
+        peer_ip = host or _discover_peer_by_id(state, peer_device_id, cert, key)
         try:
             asyncio.run(_run_client(state, cert, key, peer_ip, port, folder))
             success(f"Folder '{folder.id}' synced.")

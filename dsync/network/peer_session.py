@@ -23,6 +23,8 @@ from dsync.network.backup_direction import BackupSession, TransferRole
 from dsync.network.config_exchange import ConfigExchange
 from dsync.network.config_validation import validate_peer_folder_config
 from dsync.network.errors import PeerAuthError
+from dsync.network.index_diff import Role as DiffRole, diff_indexes
+from dsync.network.index_exchange import FolderIndex, IndexExchange
 from dsync.network.peer_auth import (
     extract_spki,
     fingerprint_from_spki,
@@ -195,9 +197,25 @@ class PeerSession:
             await async_send_msg(writer, MsgType.FOLDER_ID, self._folder.id.encode())
             exchange = ConfigExchange(own_entry=self._folder, own_device_id=own_id)
             await exchange.exchange_as_source(writer, reader, peer_id)
-            files = _enumerate_folder_files(self._folder)
-            logger.info("source sending %d file(s) to %s", len(files), peer_id)
-            await backup.send_files(writer, reader, files, Path(self._folder.path))
+
+            folder_path = Path(self._folder.path)
+            local_index = await FolderIndex.build(
+                self._folder.id, folder_path, self._folder.recursive
+            )
+            peer_index = await IndexExchange(local_index).exchange(writer, reader, is_source=True)
+            diff = diff_indexes(local_index, peer_index, DiffRole.SOURCE)
+            logger.info(
+                "diff: %d to upload, %d unchanged (skipped)",
+                len(diff.to_upload),
+                len(diff.unchanged),
+            )
+
+            if not diff.to_upload:
+                print(f"[+] '{self._folder.id}' already up to date, nothing to transfer")
+            else:
+                files_to_send = tuple(folder_path / e.path for e in diff.to_upload)
+                await backup.send_files(writer, reader, files_to_send, folder_path)
+
             # Half-close so the receiver sees EOF and exits its loop. Then
             # block on the peer's EOF so the caller may safely close the
             # underlying QUIC connection — without this round-trip the
@@ -227,8 +245,20 @@ class PeerSession:
                 # No local config for this folder — complete protocol, accept blindly.
                 exchange = _make_noop_exchange(folder_id)
                 await exchange.exchange_as_peer(writer, reader, peer_id)
-            logger.info("peer receiving files from %s into %s", peer_id, dest_root)
-            await backup.receive_files(reader, writer, dest_root)
+
+            local_index = await FolderIndex.build(folder_id, dest_root, recursive=True)
+            peer_index = await IndexExchange(local_index).exchange(writer, reader, is_source=False)
+            diff = diff_indexes(local_index, peer_index, DiffRole.RECEIVER)
+            logger.info(
+                "diff: %d to download, %d unchanged (skipped)",
+                len(diff.to_download),
+                len(diff.unchanged),
+            )
+
+            if not diff.to_download:
+                print(f"[+] '{folder_id}' already up to date, nothing to receive")
+            else:
+                await backup.receive_files(reader, writer, dest_root)
             # Signal back to the source that all chunks have been processed.
             writer.write_eof()
 
