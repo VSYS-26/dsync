@@ -16,12 +16,13 @@ import yaml
 
 from dsync.integrity import compute_sha256
 from dsync.network.errors import FrameValidationError
-from dsync.network.p2p_core import async_recv_index, async_send_index
+from dsync.network.quic_core import async_recv_index, async_send_index
+
 
 @dataclass(frozen=True)
 class FileIndexEntry:
     """One file's state as recorded in a `FolderIndex`.
-    
+
     Attributes:
         path: POSIX-style path relative to the folder root.
         size: Size of the file in bytes.
@@ -31,6 +32,7 @@ class FileIndexEntry:
     path: str
     size: int
     sha256: str
+
 
 @dataclass(frozen=True)
 class FolderIndex:
@@ -50,7 +52,7 @@ class FolderIndex:
     @classmethod
     async def build(cls, folder_id: str, path: Path, recursive: bool) -> "FolderIndex":
         """Walk `path` and hash every regular file it contains.
-        
+
         Args:
             folder_id: ID of the `FolderEntry` this index describes.
             path: File or directory to index. If it doesn't exist yet
@@ -58,7 +60,7 @@ class FolderIndex:
                 empty index is returned.
             recursive: Whether to descend into subdirectories when `path`
                 is a directory. Ignored if `path` is a file.
-                
+
         Returns:
             A `FolderIndex` with one entry per file, sorted by path.
             Files that vanish between the initial `is_file()` check and hashing/
@@ -81,13 +83,12 @@ class FolderIndex:
                 entry = await cls._hash_entry(p, p.relative_to(path).as_posix())
                 if entry is not None:
                     entries.append(entry)
-        
+
         # else: path does not exist yet -> empty index, everything the
         # peer has for this folder counts as "new" from our side.
 
         entries.sort(key=lambda e: e.path)
         return cls(folder_id=folder_id, generated_at=time.time(), files=entries)
-    
 
     @staticmethod
     async def _hash_entry(p: Path, rel_path: str) -> "FileIndexEntry | None":
@@ -108,20 +109,15 @@ class FolderIndex:
             return None
         return FileIndexEntry(path=rel_path, size=size, sha256=digest)
 
-
     def to_yaml(self) -> bytes:
         """Serialize this index as a YAML-encoded byte payload."""
         return yaml.safe_dump(
             {
                 "folder_id": self.folder_id,
                 "generated_at": self.generated_at,
-                "files": [
-                    {"path": e.path, "size": e.size, "sha256": e.sha256}
-                    for e in self.files
-                ],
+                "files": [{"path": e.path, "size": e.size, "sha256": e.sha256} for e in self.files],
             }
         ).encode("utf-8")
-
 
     @classmethod
     def from_yaml(cls, data: bytes) -> "FolderIndex":
@@ -131,30 +127,29 @@ class FolderIndex:
             FileIndexEntry(
                 path=f["path"],
                 size=f["size"],
-                sha256=f["sha256"]
+                sha256=f["sha256"],
             )
             for f in raw["files"]
         ]
         return cls(
             folder_id=raw["folder_id"],
             generated_at=raw["generated_at"],
-            files=files
+            files=files,
         )
-    
 
     def as_dict(self) -> dict[str, FileIndexEntry]:
         """Return entries keyed by relative path, for O(1) diffing lookups."""
         return {e.path: e for e in self.files}
-    
+
 
 class IndexExchange:
     """Exchanges `FolderIndex` snaphots between peers before payload transfer.
-    
+
     Both sides build their own index of the folder being synced and send
     it to the peer, and both sides receive the peer's index in return.
     The resulting pair (`own_index`, peer's `FolderIndex`) is the input
     for the upcoming diff step that decides which files actually need to move.
-    
+
     The index is exchanged as a single YAML document over its own
     `MsgType.INDEX` frame (`async_send_index` / `async_recv_index`). Unlike
     the folder config, an index grows with the number of files in the
@@ -165,7 +160,6 @@ class IndexExchange:
     def __init__(self, own_index: FolderIndex) -> None:
         """Initialize with this node's own, already-built index."""
         self.own_index = own_index
-    
 
     async def exchange(
         self,
@@ -174,17 +168,17 @@ class IndexExchange:
         is_source: bool,
     ) -> FolderIndex:
         """Send `own_index` and receive the peer's index.
-        
+
         Args:
             writer: Stream writer to peer.
             reader: Stream reader from peer.
             is_source: Send-first/receive-first ordering flag, using the
                 same convention as `ConfigExchange.exchange_and_validate`
                 so both peers agree on who goes first.
-        
+
         Returns:
             The peer's `FolderIndex`.
-            
+
         Raises:
             FrameValidationError: If the peer's index is malformed, or
                 desribes a different folder than `own_index`.
@@ -195,19 +189,18 @@ class IndexExchange:
         else:
             peer_index = await self._recv_peer_index(reader)
             await self._send_own_index(writer)
-        
+
         if peer_index.folder_id != self.own_index.folder_id:
             raise FrameValidationError(
                 f"Peer index folder_id mismatch: expected '{self.own_index.folder_id}', "
                 f"got '{peer_index.folder_id}'"
             )
-        
+
         print(
             f"[+] Index exchange completed: {len(self.own_index.files)} files locally, "
             f"/ {len(peer_index.files)} remote entries"
         )
         return peer_index
-    
 
     async def _send_own_index(self, writer: asyncio.StreamWriter) -> None:
         payload = self.own_index.to_yaml()
@@ -216,7 +209,6 @@ class IndexExchange:
             f"{len(self.own_index.files)} files ({len(payload)} bytes)..."
         )
         await async_send_index(writer, payload)
-
 
     async def _recv_peer_index(self, reader: asyncio.StreamReader) -> FolderIndex:
         print("[*] Waiting to receive peer's index...")

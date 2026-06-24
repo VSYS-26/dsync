@@ -18,6 +18,7 @@ from dsync.network.quic_transport import start_dialer, start_listener
 
 if TYPE_CHECKING:
     from dsync.config import FolderEntry
+    from dsync.identity import PeerMapStore
     from dsync.state import AppState
 
 _DEFAULT_PORT = 9999
@@ -215,7 +216,7 @@ def _discover_peer_by_id(
     return str(peer_info.ipv4)
 
 
-def _make_peer_store() -> object:
+def _make_peer_store() -> PeerMapStore:
     from dsync.identity import PeerMapStore
 
     return PeerMapStore()

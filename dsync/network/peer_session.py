@@ -39,12 +39,13 @@ from dsync.network.quic_core import (
     async_send_msg,
     get_quic_channel_binding,
 )
-from dsync.state import AppState
 
 if TYPE_CHECKING:
     import asyncio
 
     from aioquic.quic.connection import QuicConnection
+
+    from dsync.state import AppState
 
 logger = logging.getLogger(__name__)
 
@@ -218,7 +219,9 @@ class PeerSession:
                     writer,
                     reader,
                     peer_id,
-                    validate_fn=lambda src, pid: validate_peer_folder_config(local_entry, src, pid),
+                    validate_fn=lambda src, pid: validate_peer_folder_config(
+                        local_entry, src, pid, own_id
+                    ),
                 )
             else:
                 # No local config for this folder — complete protocol, accept blindly.
@@ -285,7 +288,7 @@ def _make_noop_exchange(folder_id: str) -> ConfigExchange:
 
     placeholder = FolderEntry(
         id=folder_id,
-        path="/dev/null",
+        path=Path("/dev/null"),
         mode=SyncMode.BACKUP_FROM_PEER,
         devices=None,
         recursive=False,

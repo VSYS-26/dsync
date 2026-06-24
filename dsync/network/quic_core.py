@@ -39,6 +39,11 @@ CHANNEL_BINDING_LENGTH = 32
 #: Upper bound for a CONFIG frame payload (64 KiB is generous for YAML config).
 MAX_CONFIG_SIZE: Final[int] = 64 * 1024
 
+#: Upper bound for an INDEX frame payload. A folder index carries one YAML
+#: entry per file (~120 B: relative path, size, 64-char SHA-256), so 64 MiB
+#: comfortably covers folders with hundreds of thousands of files.
+MAX_INDEX_SIZE: Final[int] = 64 * 1024 * 1024
+
 #: SPKI || sig payload size for the AUTH frame (RSA-2048 SPKI 294 B + sig 256 B).
 _AUTH_PAYLOAD_SIZE: Final[int] = 550
 
@@ -59,6 +64,7 @@ class MsgType(IntEnum):
     CONFIG_ACK = 5
     FILE_VERIFY = 11
     FOLDER_ID = 12
+    INDEX = 13
 
     # Peer-to-relay control channel
     REGISTER_ACK = 6
@@ -162,6 +168,39 @@ async def async_recv_config_ack(reader: asyncio.StreamReader) -> None:
         raise RuntimeError("Connection closed before config ack received")
     if msg_type != MsgType.CONFIG_ACK:
         raise RuntimeError(f"Expected CONFIG_ACK (type {MsgType.CONFIG_ACK}), got type {msg_type}")
+
+
+async def async_send_index(writer: asyncio.StreamWriter, index_data: bytes) -> None:
+    """Send a folder index payload as a single INDEX frame."""
+    await async_send_msg(writer, MsgType.INDEX, index_data)
+
+
+async def async_recv_index(reader: asyncio.StreamReader) -> bytes:
+    """Receive a folder index payload, rejecting oversized payloads.
+
+    Raises:
+        RuntimeError: If message type is not INDEX, or payload exceeds
+            ``MAX_INDEX_SIZE``.
+    """
+    try:
+        header = await reader.readexactly(5)
+    except asyncio.IncompleteReadError as err:
+        raise RuntimeError("Connection closed before index received") from err
+
+    msg_type, length = struct.unpack("!BI", header)
+
+    if msg_type != MsgType.INDEX:
+        raise RuntimeError(f"Expected INDEX (type {MsgType.INDEX}), got type {msg_type}")
+
+    if length > MAX_INDEX_SIZE:
+        raise RuntimeError(
+            f"Index payload too large: {length} B exceeds limit of {MAX_INDEX_SIZE} B"
+        )
+
+    try:
+        return await reader.readexactly(length)
+    except asyncio.IncompleteReadError as err:
+        raise RuntimeError("Connection lost during index reception") from err
 
 
 def build_quic_configuration(
