@@ -214,8 +214,12 @@ class PeerSession:
             local_entry = _find_local_entry(self._state, folder_id)
             if local_entry is not None:
                 exchange = ConfigExchange(own_entry=local_entry, own_device_id=own_id)
-                source_entry = await exchange.exchange_as_peer(writer, reader, peer_id)
-                validate_peer_folder_config(local_entry, source_entry, peer_id)
+                await exchange.exchange_as_peer(
+                    writer,
+                    reader,
+                    peer_id,
+                    validate_fn=lambda src, pid: validate_peer_folder_config(local_entry, src, pid),
+                )
             else:
                 # No local config for this folder — complete protocol, accept blindly.
                 exchange = _make_noop_exchange(folder_id)
