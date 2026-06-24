@@ -1,39 +1,26 @@
-"""CLI command to start peer-to-peer data synchronization."""
+"""CLI command: direct QUIC peer-to-peer sync (server or client mode)."""
 
 from __future__ import annotations
 
 import asyncio
-import hashlib
+import contextlib
+from pathlib import Path
+import socket
 from typing import TYPE_CHECKING, Annotated
 
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.serialization import load_pem_private_key
 import typer
 
 from dsync.cli.console import error, info, success, warn
-from dsync.identity import PeerMapStore
 from dsync.network.discovery import FingerprintAnnouncer, PeerDiscoveryRunner
-from dsync.network.node import P2PNode
+from dsync.network.peer_session import PeerSession
+from dsync.network.quic_core import build_quic_configuration
+from dsync.network.quic_transport import start_dialer, start_listener
 
 if TYPE_CHECKING:
     from dsync.config import FolderEntry
     from dsync.state import AppState
 
-
-def _get_own_fingerprint(_cert_path: str, key_path: str) -> str | None:
-    """Extract fingerprint from the TLS certificate (matches devices.yaml)."""
-    try:
-        from pathlib import Path
-
-        with Path(key_path).open("rb") as f:
-            key = load_pem_private_key(f.read(), password=None)
-        spki = key.public_key().public_bytes(
-            serialization.Encoding.DER,
-            serialization.PublicFormat.SubjectPublicKeyInfo,
-        )
-        return hashlib.sha256(spki).hexdigest()
-    except Exception:
-        return None
+_DEFAULT_PORT = 9999
 
 
 def start_p2p_sync(
@@ -53,137 +40,182 @@ def start_p2p_sync(
     ] = None,
     cert: Annotated[str, typer.Option(help="Path to your certificate (.pem)")] = "cert.pem",
     key: Annotated[str, typer.Option(help="Path to your private key (.pem)")] = "key.pem",
-    port: Annotated[int, typer.Option(help="The network port")] = 9999,
+    port: Annotated[int, typer.Option(help="UDP port for direct QUIC connection")] = _DEFAULT_PORT,
+    recv_dir: Annotated[
+        Path,
+        typer.Option("--recv-dir", help="Fallback directory for received files"),
+    ] = Path("received-files"),
 ) -> None:
-    """Main CLI command for starting peer-to-peer data synchronization.
+    """Direct QUIC peer-to-peer sync.
 
-    Initializes the P2P node and handles the establishment of the basic (still unencrypted) TCP connection.
-    It supports two main modes:
-
-    LAN mode: The program either acts as a listening server or connects directly.
-
-    Once the raw socket connection is established, it is passed to the 'P2PNode',
-    which handles the TLS handshake, authentication, and data exchange.
-
-    Args:
-        ctx (typer.Context): The typer context containing the runtime AppState.
-        mode (str): The role in the direct connection ('server' or 'client').
-        host (str | None): Peer IP/hostname for client mode (default: 127.0.0.1).
-        folder_id (str | None): Folder ID to sync in client mode.
-        peer (str | None): Device ID from devices.yaml to connect to.
-        cert (str): Path to ones own TLS certificate file (.pem).
-        key (str): Path to ones own private key file (.pem).
-        port (int): The network port for direct connections (local).
+    Server mode: listens for one inbound connection and receives files.
+    Client mode: connects to a peer and sends the configured folder.
     """
     state: AppState = ctx.obj
+    is_server = mode.lower() == "server"
 
-    is_server: bool = mode.lower() == "server"
-
-    # Resolve folder for client mode
-    client_folder: FolderEntry | None = None
-    peer_device_id: str | None = peer
-    if not is_server:
-        if folder_id:
-            folder = _find_folder(state, folder_id)
-            if folder is None:
-                error(f"Folder '{folder_id}' not found in folders.yaml")
-                raise typer.Exit(code=1)
-            client_folder = folder
-            info(f"Client mode: syncing folder '{folder_id}'")
-            # Auto-infer peer device from folder config if not explicitly given
-            if peer_device_id is None and folder.devices:
-                peer_device_id = folder.devices[0]
-                info(f"Auto-inferred peer device '{peer_device_id}' from folder config")
-        else:
-            warn("No --folder-id set; client can authenticate but won't send files")
-
-    node = P2PNode(is_server, cert, key, state, folder=client_folder)
-
-    announcer = None
     if is_server:
-        host_val = "0.0.0.0"  # nosec B104
-        info(f"Starting server on port {port}, waiting for connection...")
-        server_fingerprint = _get_own_fingerprint(cert, key)
-        if server_fingerprint:
-            announcer = FingerprintAnnouncer(fingerprint=server_fingerprint)
-            announcer.start()
-            info(f"Announcing as {server_fingerprint[:16]}...")
-    else:
-        host_val = host or _discover_peer_by_id(state, peer_device_id, cert, key)
-        info(f"Connecting to server on {host_val}:{port}...")
+        announcer = None
+        try:
+            from dsync.cli.commands.sync.run_backup import _get_own_fingerprint
+            from dsync.network.discovery import FingerprintAnnouncer
 
+            fp = _get_own_fingerprint(cert, key)
+            if fp:
+                announcer = FingerprintAnnouncer(fingerprint=fp)
+                announcer.start()
+                info(f"Announcing as {fp[:16]}...")
+        except Exception:
+            pass
+
+        try:
+            asyncio.run(_run_server(state, cert, key, port, recv_dir))
+            success("Transfer complete.")
+        except KeyboardInterrupt:
+            warn("\nShutting down...")
+        finally:
+            if announcer is not None:
+                announcer.stop()
+    else:
+        folder = _resolve_folder(state, folder_id)
+        if folder is None:
+            error("--folder-id required in client mode (or no matching folder found)")
+            raise typer.Exit(code=1)
+        peer_ip = host or _discover_peer_by_id(state, peer, cert, key)
+        try:
+            asyncio.run(_run_client(state, cert, key, peer_ip, port, folder))
+            success(f"Folder '{folder.id}' synced.")
+        except KeyboardInterrupt:
+            warn("\nShutting down...")
+        except Exception as exc:
+            error(f"Sync failed: {exc}")
+            raise typer.Exit(code=1) from exc
+
+
+async def _run_server(
+    state: AppState,
+    cert: str,
+    key: str,
+    port: int,
+    recv_dir: Path,
+) -> None:
+    """QUIC listener: accept one inbound connection and receive files."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.bind(("0.0.0.0", port))  # nosec B104
+    sock.setblocking(False)
+
+    cfg = build_quic_configuration(is_client=False, cert_path=cert, key_path=key)
+
+    loop = asyncio.get_running_loop()
+    stream_future: asyncio.Future[tuple[asyncio.StreamReader, asyncio.StreamWriter]] = (
+        loop.create_future()
+    )
+
+    def on_stream(
+        reader: asyncio.StreamReader,
+        writer: asyncio.StreamWriter,
+    ) -> None:
+        if not stream_future.done():
+            stream_future.set_result((reader, writer))
+
+    recv_dir.mkdir(parents=True, exist_ok=True)
+    info(f"Listening on UDP :{port} (waiting for peer)...")
+
+    endpoint = await start_listener(sock=sock, configuration=cfg, stream_handler=on_stream)
     try:
-        asyncio.run(node.start(host_val, port))
-        success("Data transfer completed or connection closed.")
-    except KeyboardInterrupt:
-        info("\nShutting down...")
-    except Exception as e:
-        info(f"\n[!] Sync stopped: {e}")
+        accepted = await asyncio.wait_for(endpoint.wait_accepted(), timeout=120.0)
+        await asyncio.wait_for(accepted.wait_connected(), timeout=15.0)
+        reader, writer = await asyncio.wait_for(stream_future, timeout=15.0)
+
+        session = PeerSession.as_peer(cert_path=cert, key_path=key, state=state, recv_dir=recv_dir)
+        peer_id = await session.run(reader, writer, accepted._quic)
+        info(f"Received files from {peer_id}")
     finally:
-        if announcer is not None:
-            announcer.stop()
+        with contextlib.suppress(Exception):
+            endpoint.transport.close()
+        sock.close()
+
+
+async def _run_client(
+    state: AppState,
+    cert: str,
+    key: str,
+    peer_ip: str,
+    port: int,
+    folder: FolderEntry,
+) -> None:
+    """QUIC dialer: connect to peer and send folder."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.bind(("0.0.0.0", 0))  # nosec B104
+    sock.setblocking(False)
+
+    cfg = build_quic_configuration(is_client=True, cert_path=cert, key_path=key)
+
+    info(f"Connecting to {peer_ip}:{port}...")
+    endpoint = await start_dialer(sock=sock, peer_addr=(peer_ip, port), configuration=cfg)
+    try:
+        await asyncio.wait_for(endpoint.protocol.wait_connected(), timeout=15.0)
+        reader, writer = await endpoint.protocol.create_stream()
+
+        session = PeerSession.as_source(cert_path=cert, key_path=key, state=state, folder=folder)
+        peer_id = await session.run(reader, writer, endpoint.protocol._quic)
+        info(f"Sent folder '{folder.id}' to {peer_id}")
+    finally:
+        with contextlib.suppress(Exception):
+            endpoint.transport.close()
+        sock.close()
+
+
+def _resolve_folder(state: AppState, folder_id: str | None) -> FolderEntry | None:
+    if folder_id is None:
+        return None
+    return next((f for f in state.folders.entries if f.id == folder_id), None)
 
 
 def _discover_peer_by_id(
-    state: AppState, device_id: str | None, cert: str = "cert.pem", key: str = "key.pem"
+    state: AppState,
+    device_id: str | None,
+    cert: str = "cert.pem",
+    key: str = "key.pem",
 ) -> str:
-    """Discover a peer's IP on the LAN by its device ID from devices.yaml.
+    from dsync.cli.commands.sync.run_backup import _get_own_fingerprint
 
-    Falls back to 127.0.0.1 if no device_id given.
-    """
     if device_id is None:
         warn("No peer specified, falling back to localhost")
         return "127.0.0.1"
 
-    # Look up the device's fingerprint
-    target_device = None
-    for device in state.devices.trusted_devices:
-        if device.id == device_id:
-            target_device = device
-            break
-
+    target_device = next((d for d in state.devices.trusted_devices if d.id == device_id), None)
     if target_device is None:
         error(f"Device '{device_id}' not found in devices.yaml")
         raise typer.Exit(code=1)
 
-    target_fingerprint = target_device.fingerprint
-
-    # Load our own fingerprint from the TLS certificate
-    own_fingerprint = _get_own_fingerprint(cert, key)
-    if own_fingerprint:
-        info(f"Announcing as {own_fingerprint[:16]}...")
+    own_fp = _get_own_fingerprint(cert, key)
+    if own_fp:
+        info(f"Announcing as {own_fp[:16]}...")
     else:
         warn("No cert/key found, own fingerprint filtering disabled.")
 
-    # Announce + discover
-    announcer = FingerprintAnnouncer(fingerprint=own_fingerprint or "")
+    announcer = FingerprintAnnouncer(fingerprint=own_fp or "")
     announcer.start()
 
-    peer_store = PeerMapStore()
-    runner = PeerDiscoveryRunner(store=peer_store)
-
-    info("Discovering 1 peer(s) on local network...")
-    peers, stats = runner.discover(
-        duration_seconds=8,
-        own_fingerprint=own_fingerprint,
-    )
+    store_instance = _make_peer_store()
+    runner = PeerDiscoveryRunner(store=store_instance)
+    info("Discovering peer on local network...")
+    peers, stats = runner.discover(duration_seconds=8, own_fingerprint=own_fp)
     announcer.stop()
 
-    info(f"Discovery complete: {stats.events_seen} events, {stats.peers_written} peers total")
+    info(f"Discovery: {stats.events_seen} events, {stats.peers_written} peers")
 
-    # Look for our target peer
-    if target_fingerprint in peers:
-        peer_info = peers[target_fingerprint]
-        success(f"Verified: {device_id}")
-        return str(peer_info.ipv4)
+    peer_info = peers.get(target_device.fingerprint)
+    if peer_info is None:
+        error(f"Peer '{device_id}' not found on local network")
+        raise typer.Exit(code=1)
 
-    error(f"Peer '{device_id}' ({target_fingerprint[:16]}...) not found on local network")
-    raise typer.Exit(code=1)
+    success(f"Found {device_id}")
+    return str(peer_info.ipv4)
 
 
-def _find_folder(state: AppState, folder_id: str) -> FolderEntry | None:
-    """Find a folder entry by its ID."""
-    for folder in state.folders.entries:
-        if folder.id == folder_id:
-            return folder
-    return None
+def _make_peer_store() -> object:
+    from dsync.identity import PeerMapStore
+
+    return PeerMapStore()

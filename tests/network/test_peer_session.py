@@ -90,6 +90,7 @@ def _make_app_state(
     *,
     config_dir: Path,
     trusted: list[tuple[str, str]],
+    folder_entries: list[FolderEntry] | None = None,
 ) -> AppState:
     """Build an AppState whose devices.yaml lists ``trusted`` (id, fingerprint) pairs."""
     relays = RelaysConfig(
@@ -107,7 +108,7 @@ def _make_app_state(
             TrustedDevice(id=pid, fingerprint=fp, relay_id="relay-test") for pid, fp in trusted
         ]
     )
-    folders = FoldersConfig(entries=[])
+    folders = FoldersConfig(entries=folder_entries or [])
     return AppState(
         config_dir=config_dir,
         folders=folders,
@@ -136,6 +137,24 @@ async def test_source_to_peer_file_transfer(tmp_path: Path) -> None:
 
     recv_dir = tmp_path / "recv"
     recv_dir.mkdir()
+    peer_recv_folder = tmp_path / "peer-recv"
+    peer_recv_folder.mkdir()
+
+    folder_entry = FolderEntry(
+        id="hello-folder",
+        path=src_folder,
+        mode=SyncMode.BACKUP_TO_PEER,
+        devices=["peer-device"],
+        recursive=False,
+    )
+    # Peer-side folder config: same id, receive mode, destination is peer_recv_folder.
+    peer_folder_entry = FolderEntry(
+        id="hello-folder",
+        path=peer_recv_folder,
+        mode=SyncMode.BACKUP_FROM_PEER,
+        devices=["source-device"],
+        recursive=False,
+    )
 
     # AppStates: each side trusts the other
     src_state = _make_app_state(
@@ -145,14 +164,7 @@ async def test_source_to_peer_file_transfer(tmp_path: Path) -> None:
     peer_state = _make_app_state(
         config_dir=tmp_path,
         trusted=[("source-device", src_fp)],
-    )
-
-    folder_entry = FolderEntry(
-        id="hello-folder",
-        path=src_folder,
-        mode=SyncMode.BACKUP_TO_PEER,
-        devices=["peer-device"],
-        recursive=False,
+        folder_entries=[peer_folder_entry],
     )
 
     # QUIC sockets
@@ -235,8 +247,8 @@ async def test_source_to_peer_file_transfer(tmp_path: Path) -> None:
         assert verified_on_source == "peer-device"
         assert verified_on_peer == "source-device"
 
-        # File should now exist under recv_dir/<source-device>/hello.bin
-        received_path = recv_dir / "source-device" / "hello.bin"
+        # File should now exist under the peer's configured folder path.
+        received_path = peer_recv_folder / "hello.bin"
         assert received_path.is_file()
         assert hashlib.sha256(received_path.read_bytes()).hexdigest() == expected_digest
     finally:

@@ -1,6 +1,6 @@
 """CLI command to sync folders: tries local P2P first, falls back to relay daemon.
 
-Local path: discovers peers via mDNS/Zeroconf and connects directly via P2PNode.
+Local path: discovers peers via mDNS/Zeroconf and connects directly via QUIC.
 Relay fallback: if no peer found on LAN (or connection fails), asks the running
 relay-connect daemon over a Unix-domain socket to perform the sync.
 """
@@ -8,8 +8,10 @@ relay-connect daemon over a Unix-domain socket to perform the sync.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hashlib
 from pathlib import Path
+import socket
 from typing import TYPE_CHECKING, Annotated
 
 from cryptography.hazmat.primitives import serialization
@@ -21,13 +23,17 @@ from dsync.config import SyncMode
 from dsync.identity import PeerMapStore
 from dsync.network.discovery import FingerprintAnnouncer, PeerDiscoveryRunner
 from dsync.network.local_ipc import LocalControlClient, SyncFolderRequest
-from dsync.network.node import P2PNode
+from dsync.network.peer_session import PeerSession
+from dsync.network.quic_core import build_quic_configuration
+from dsync.network.quic_transport import start_dialer
 
 if TYPE_CHECKING:
     from typing import Any
 
     from dsync.config import FolderEntry, TrustedDevice
     from dsync.state import AppState
+
+_LOCAL_P2P_PORT = 9999
 
 
 def _get_own_fingerprint(_cert_path: str, key_path: str) -> str | None:
@@ -247,17 +253,9 @@ async def _sync_folder_with_peer(
         peer_ip = peer_info.ipv4 if peer_info is not None else None
 
     if peer_ip is not None:
-        info(f"  [{peer_id}] Connecting directly at {peer_ip}...")
-        node = P2PNode(
-            is_server=False,
-            cert_path=cert,
-            key_path=key,
-            state=state,
-            folder=folder,
-        )
-        port = 9999
+        info(f"  [{peer_id}] Connecting directly at {peer_ip}:{_LOCAL_P2P_PORT}...")
         try:
-            await node.start(host=peer_ip, port=port)
+            await _sync_direct_quic(folder, peer_ip, _LOCAL_P2P_PORT, cert, key, state)
         except Exception as exc:
             warn(f"  [{peer_id}] Local P2P failed ({exc}), trying relay...")
         else:
@@ -277,3 +275,30 @@ async def _sync_folder_with_peer(
     if response.status != "ok":
         raise RuntimeError(f"Relay sync failed: {response.reason}")
     success(f"  [{peer_id}] synced via relay")
+
+
+async def _sync_direct_quic(
+    folder: FolderEntry,
+    peer_ip: str,
+    peer_port: int,
+    cert: str,
+    key: str,
+    state: AppState,
+) -> None:
+    """Direct QUIC sync: dial peer and send folder via PeerSession."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.bind(("0.0.0.0", 0))  # nosec B104
+    sock.setblocking(False)
+
+    cfg = build_quic_configuration(is_client=True, cert_path=cert, key_path=key)
+    endpoint = await start_dialer(sock=sock, peer_addr=(peer_ip, peer_port), configuration=cfg)
+    try:
+        await asyncio.wait_for(endpoint.protocol.wait_connected(), timeout=15.0)
+        reader, writer = await endpoint.protocol.create_stream()
+
+        session = PeerSession.as_source(cert_path=cert, key_path=key, state=state, folder=folder)
+        await session.run(reader, writer, endpoint.protocol._quic)
+    finally:
+        with contextlib.suppress(Exception):
+            endpoint.transport.close()
+        sock.close()

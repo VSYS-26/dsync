@@ -32,6 +32,7 @@ from dsync.network.peer_auth import (
 from dsync.network.quic_core import (
     MsgType,
     async_recv_auth_msg,
+    async_recv_msg,
     async_send_msg,
     get_quic_channel_binding,
 )
@@ -188,6 +189,7 @@ class PeerSession:
         backup = BackupSession(self._role)
         if self._role is TransferRole.SOURCE:
             assert self._folder is not None  # checked in __init__
+            await async_send_msg(writer, MsgType.FOLDER_ID, self._folder.id.encode())
             files = _enumerate_folder_files(self._folder)
             logger.info("source sending %d file(s) to %s", len(files), peer_id)
             await backup.send_files(writer, reader, files, Path(self._folder.path))
@@ -199,10 +201,14 @@ class PeerSession:
             await reader.read()
         else:
             assert self._recv_dir is not None  # checked in __init__
-            peer_dir = self._recv_dir / peer_id
-            peer_dir.mkdir(parents=True, exist_ok=True)
-            logger.info("peer receiving files from %s into %s", peer_id, peer_dir)
-            await backup.receive_files(reader, writer, peer_dir)
+            msg_type, folder_id_bytes = await async_recv_msg(reader)
+            if msg_type != MsgType.FOLDER_ID:
+                raise PeerAuthError(f"Expected FOLDER_ID frame, got type {msg_type}")
+            folder_id = folder_id_bytes.decode() if folder_id_bytes else ""
+            dest_root = _resolve_recv_dir(self._state, folder_id, self._recv_dir, peer_id)
+            dest_root.mkdir(parents=True, exist_ok=True)
+            logger.info("peer receiving files from %s into %s", peer_id, dest_root)
+            await backup.receive_files(reader, writer, dest_root)
             # Signal back to the source that all chunks have been processed.
             writer.write_eof()
 
@@ -246,6 +252,30 @@ class PeerSession:
             raise PeerAuthError(f"Refusing path-unsafe peer id: {peer_id!r}")
         logger.info("verified peer %s (fp=%s)", peer_id, peer_fp)
         return peer_id
+
+
+def _resolve_recv_dir(
+    state: AppState,
+    folder_id: str,
+    fallback_recv_dir: Path,
+    peer_id: str,
+) -> Path:
+    """Return the destination directory for an inbound sync of ``folder_id``.
+
+    Matches only folders whose mode permits receiving (BACKUP_FROM_PEER or
+    MIRROR). A BACKUP_TO_PEER folder is skipped even if the id matches —
+    this node is the sender for that folder, not the destination.
+
+    Falls back to ``fallback_recv_dir / peer_id / folder_id`` when no
+    matching receive-mode folder is configured.
+    """
+    from dsync.config import SyncMode
+
+    _recv_modes = {SyncMode.BACKUP_FROM_PEER, SyncMode.MIRROR}
+    for entry in state.folders.entries:
+        if entry.id == folder_id and entry.mode in _recv_modes:
+            return Path(entry.path)
+    return fallback_recv_dir / peer_id / folder_id if folder_id else fallback_recv_dir / peer_id
 
 
 def _enumerate_folder_files(folder: FolderEntry) -> tuple[Path, ...]:

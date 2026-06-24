@@ -548,6 +548,16 @@ class RelayDaemon:
                 "status": "error",
                 "reason": f"folder {folder.id!r} is not configured for peer {device.id!r}",
             }
+        from dsync.config import SyncMode
+
+        if folder.mode == SyncMode.BACKUP_FROM_PEER:
+            return {
+                "status": "error",
+                "reason": (
+                    f"folder {folder.id!r} is configured as backup-from-peer "
+                    "(receive-only); cannot send from it"
+                ),
+            }
 
         try:
             await self._run_outbound_sync(

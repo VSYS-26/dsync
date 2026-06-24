@@ -46,10 +46,8 @@ _AUTH_PAYLOAD_SIZE: Final[int] = 550
 class MsgType(IntEnum):
     """Logical message type on a QUIC stream (or relay-control channel).
 
-    Values 0-5 are carried over from the legacy TCP framing in ``p2p_core.py``
-    so the AUTH/HELLO/FILE/CONFIG semantics stay numerically stable across
-    the transport swap. Values 6+ are new and only appear on the
-    peer-to-relay control channel.
+    Values are stable across versions. Values 6+ are new and only appear on
+    the peer-to-relay control channel.
     """
 
     # Peer-to-peer data channel (also AUTH on the relay control channel)
@@ -60,6 +58,7 @@ class MsgType(IntEnum):
     CONFIG = 4
     CONFIG_ACK = 5
     FILE_VERIFY = 11
+    FOLDER_ID = 12
 
     # Peer-to-relay control channel
     REGISTER_ACK = 6
@@ -173,10 +172,9 @@ def build_quic_configuration(
 ) -> QuicConfiguration:
     """Construct a QuicConfiguration with self-signed-cert defaults.
 
-    Mirrors the TLS posture of ``p2p_core.create_tls_context``: load the local
-    cert chain, disable peer-cert verification (CERT_NONE), advertise the
-    dsync ALPN. MITM resistance is provided by the application-layer AUTH
-    frame, not by the X.509 PKI.
+    Loads the local cert chain, disables peer-cert verification (CERT_NONE),
+    and advertises the dsync ALPN. MITM resistance is provided by the
+    application-layer AUTH frame, not by the X.509 PKI.
 
     Args:
         is_client: True for the dialer, False for the listener.
