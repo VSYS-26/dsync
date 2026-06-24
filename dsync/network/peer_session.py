@@ -259,8 +259,12 @@ class PeerSession:
                 print(f"[+] '{folder_id}' already up to date, nothing to receive")
             else:
                 await backup.receive_files(reader, writer, dest_root)
-            # Signal back to the source that all chunks have been processed.
+            # Half-close our send side, then drain source's remaining data
+            # before returning — matches the source's write_eof + reader.read()
+            # pattern so _handle_inbound_peer doesn't close the QUIC connection
+            # before the source has read our index.
             writer.write_eof()
+            await reader.read()
 
         return peer_id
 
