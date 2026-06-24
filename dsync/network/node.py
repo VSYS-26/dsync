@@ -15,17 +15,24 @@ from cryptography.hazmat.primitives.serialization import (
     load_der_public_key,
     load_pem_private_key,
 )
+import yaml
 
 from dsync.config import FolderEntry, FoldersConfig
 from dsync.network.config_exchange import ConfigExchange
 from dsync.network.config_validation import validate_peer_folder_config
-from dsync.network.errors import ConfigConflictError, PeerAuthError
+from dsync.network.errors import ConfigConflictError, FrameValidationError, PeerAuthError
 from dsync.network.file_transfer import (
+    apply_renames,
     recv_folder_and_extract,
     send_path_as_zip,
 )
+from dsync.network.index_diff import (
+    Role,
+    diff_indexes,
+    renames_from_yaml,
+    renames_to_yaml,
+)
 from dsync.network.index_exchange import FolderIndex, IndexExchange
-from dsync.network.index_diff import Role, diff_indexes
 from dsync.network.sync_errors import (
     ErrorCode,
     PeerReportedError,
@@ -38,7 +45,9 @@ from .p2p_core import (
     MsgType,
     async_recv_auth_msg,
     async_recv_msg,
+    async_recv_rename,
     async_send_msg,
+    async_send_rename,
     create_tls_context,
     get_tls_channel_binding,
 )
@@ -299,7 +308,7 @@ class P2PNode:
         peer_id: str,
     ) -> None:
         """Exchange config and folder indexes, diff them, then transfer the folder as a zip.
-        
+
         Four phases run sequentially, each completing fully before the next starts:
           1. Config exchange and validation: Both sides send their folder config.
           2. Index exchange: Both sides build and exchange a snapshot of the folder's contents.
@@ -352,6 +361,17 @@ class P2PNode:
                 f"{len(diff.unchanged)} unchanged (skipped)"
             )
 
+            # The source always sends a RENAME frame (possibly empty) right
+            # after the diff point; read and apply it before any payload.
+            rename_payload = await async_recv_rename(reader)
+            try:
+                renames = renames_from_yaml(rename_payload)
+            except (KeyError, TypeError, yaml.YAMLError) as e:
+                raise FrameValidationError(f"Failed to parse peer rename commands: {e}") from e
+            if renames:
+                applied = await apply_renames(renames, dest_root)
+                print(f"[+] applied {applied} rename(s) in {dest_root}")
+
             if not diff.to_download:
                 print(f"[+] '{local_entry.id}' already up to date, nothing to transfer")
             else:
@@ -363,7 +383,9 @@ class P2PNode:
 
             await exchange.exchange_and_validate(writer, reader, peer_id, is_source=True)
 
-            local_index = await FolderIndex.build(self.folder.id, Path(self.folder.path), self.folder.recursive)
+            local_index = await FolderIndex.build(
+                self.folder.id, Path(self.folder.path), self.folder.recursive
+            )
             index_exchange = IndexExchange(local_index)
             peer_index = await index_exchange.exchange(writer, reader, is_source=True)
 
@@ -372,7 +394,14 @@ class P2PNode:
                 f"[*] Diff: '{len(diff.to_upload)}' to upload, "
                 f"{len(diff.unchanged)} unchanged (skipped)"
             )
-                
+
+            # Send rename commands for files that only moved (no re-upload).
+            # Always send a frame, even an empty one, so the receiver's
+            # unconditional recv stays in lockstep with the wire.
+            await async_send_rename(writer, renames_to_yaml(diff.renamed))
+            if diff.renamed:
+                print(f"[+] sent {len(diff.renamed)} rename command(s)")
+
             if not diff.to_upload:
                 print(f"[+] '{self.folder.id}' already up to date, nothing to transfer")
             else:

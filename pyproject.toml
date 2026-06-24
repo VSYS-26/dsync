@@ -29,6 +29,9 @@ dev = [
     "mypy>=1.13",
     "bandit>=1.8",
     "pyinstaller>=6.11",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "types-pyyaml>=6.0.12.20260518",
 ]
 
 [project.scripts]
@@ -78,6 +81,10 @@ ignore = [
     "EM102",
 ]
 task-tags = ["TODO", "FIXME"]
+
+[tool.ruff.lint.per-file-ignores]
+# Test names are self-documenting; docstrings on every test add only noise.
+"tests/**" = ["D100", "D101", "D103"]
 
 [tool.ruff.lint.isort]
 force-sort-within-sections = true
@@ -131,3 +138,7 @@ ignore_missing_imports = true
 [tool.bandit]
 exclude_dirs = ["tests", ".venv"]
 skips = ["B101"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

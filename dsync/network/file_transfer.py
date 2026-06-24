@@ -27,6 +27,7 @@ from dsync.network.errors import (
     FrameValidationError,
     TransferIntegrityError,
 )
+from dsync.network.index_diff import RenamePair
 from dsync.network.p2p_core import MsgType, async_recv_msg, async_send_msg
 from dsync.network.sync_errors import (
     ErrorCode,
@@ -300,7 +301,11 @@ async def _recv_file_body(
         raise
     except OSError as exc:
         target.unlink(missing_ok=True)
-        code = ErrorCode.DISK_FULL if getattr(exc, "errno", None) == 28 else ErrorCode.PERMISSION_DENIED
+        code = (
+            ErrorCode.DISK_FULL
+            if getattr(exc, "errno", None) == 28
+            else ErrorCode.PERMISSION_DENIED
+        )
         await notify_peer(writer, SyncError(code=code, message=str(exc)))
         raise
     except BaseException:
@@ -425,3 +430,49 @@ async def recv_folder_and_extract(
             progress.add_task(f"Extracting to {dest_root}…", total=None)
             await asyncio.to_thread(_extract)
         logger.info(f"[+] Extracted zip to {dest_root}")
+
+
+async def apply_renames(renamed: list[RenamePair], dest_root: Path) -> int:
+    """Apply received move/rename commands within ``dest_root``.
+
+    For each pair the file at ``old_path`` is moved to ``new_path`` on disk,
+    so a file the peer renamed is reused locally instead of being downloaded
+    again. Both paths are re-anchored under ``dest_root`` via
+    ``_safe_resolve_under`` and rejected if they try to escape it (absolute
+    paths, ``..`` traversal, or symlinks pointing outside the folder).
+
+    A rename whose source is missing (already applied, or removed
+    concurrently) is logged and skipped rather than aborting the whole
+    batch. This must run *before* extracting any payload zip: in the mixed
+    case the zip may also contain ``new_path``, and applying the rename
+    first means the later extraction simply overwrites it with identical
+    content.
+
+    Args:
+        renamed: Rename pairs as sent by the peer (source of truth).
+        dest_root: Destination folder root. Must exist.
+
+    Returns:
+        The number of renames actually performed.
+
+    Raises:
+        TransferIntegrityError: If either path escapes ``dest_root``.
+    """
+
+    def _apply() -> int:
+        applied = 0
+        for pair in renamed:
+            src = _safe_resolve_under(dest_root, pair.old_path)
+            dst = _safe_resolve_under(dest_root, pair.new_path)
+            if not src.exists():
+                logger.warning(
+                    f"[!] rename source missing, skipping: {pair.old_path} -> {pair.new_path}"
+                )
+                continue
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            src.rename(dst)
+            applied += 1
+            logger.info(f"[+] renamed {pair.old_path} -> {pair.new_path}")
+        return applied
+
+    return await asyncio.to_thread(_apply)

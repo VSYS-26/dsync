@@ -13,6 +13,7 @@ repos:
   hooks:
     - id: mypy
       args: [--config-file=pyproject.toml]
+      exclude: ^tests/
       additional_dependencies: [typer>=0.24.1, rich>=15.0.0, cryptography>=45.0.0, pyyaml>=6.0.2, types-pyyaml>=6.0.12, pydantic>=2.10]
 
 - repo: https://github.com/PyCQA/bandit
