@@ -44,6 +44,9 @@ MAX_CONFIG_SIZE: Final[int] = 64 * 1024
 #: comfortably covers folders with hundreds of thousands of files.
 MAX_INDEX_SIZE: Final[int] = 64 * 1024 * 1024
 
+#: Upper bound for a RENAME frame payload (64 KiB covers thousands of rename pairs).
+MAX_RENAME_SIZE: Final[int] = 64 * 1024
+
 #: SPKI || sig payload size for the AUTH frame (RSA-2048 SPKI 294 B + sig 256 B).
 _AUTH_PAYLOAD_SIZE: Final[int] = 550
 
@@ -65,6 +68,7 @@ class MsgType(IntEnum):
     FILE_VERIFY = 11
     FOLDER_ID = 12
     INDEX = 13
+    RENAME = 14
 
     # Peer-to-relay control channel
     REGISTER_ACK = 6
@@ -201,6 +205,34 @@ async def async_recv_index(reader: asyncio.StreamReader) -> bytes:
         return await reader.readexactly(length)
     except asyncio.IncompleteReadError as err:
         raise RuntimeError("Connection lost during index reception") from err
+
+
+async def async_send_rename(writer: asyncio.StreamWriter, rename_data: bytes) -> None:
+    """Send a RENAME frame carrying serialized rename pairs (YAML bytes)."""
+    await async_send_msg(writer, MsgType.RENAME, rename_data)
+
+
+async def async_recv_rename(reader: asyncio.StreamReader) -> bytes:
+    """Receive a RENAME frame; reject if oversized or wrong type.
+
+    Raises:
+        RuntimeError: If frame type is not RENAME, payload is oversize, or
+            connection is lost before the frame is fully received.
+    """
+    try:
+        header = await reader.readexactly(5)
+    except asyncio.IncompleteReadError as err:
+        raise RuntimeError("Connection closed before rename frame received") from err
+
+    msg_type, length = struct.unpack("!BI", header)
+    if msg_type != MsgType.RENAME:
+        raise RuntimeError(f"Expected RENAME (type {MsgType.RENAME}), got type {msg_type}")
+    if length > MAX_RENAME_SIZE:
+        raise RuntimeError(f"Rename payload too large: {length} B exceeds {MAX_RENAME_SIZE} B")
+    try:
+        return await reader.readexactly(length)
+    except asyncio.IncompleteReadError as err:
+        raise RuntimeError("Connection lost during rename frame reception") from err
 
 
 def build_quic_configuration(

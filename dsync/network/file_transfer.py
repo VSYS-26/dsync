@@ -28,7 +28,7 @@ from dsync.network.errors import (
     TransferIntegrityError,
 )
 from dsync.network.index_diff import RenamePair
-from dsync.network.p2p_core import MsgType, async_recv_msg, async_send_msg
+from dsync.network.quic_core import MsgType, async_recv_msg, async_send_msg
 from dsync.network.sync_errors import (
     ErrorCode,
     PeerReportedError,

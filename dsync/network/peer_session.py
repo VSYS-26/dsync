@@ -18,12 +18,20 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import yaml
+
 from dsync.config import FolderEntry
 from dsync.network.backup_direction import BackupSession, TransferRole
 from dsync.network.config_exchange import ConfigExchange
 from dsync.network.config_validation import validate_peer_folder_config
-from dsync.network.errors import PeerAuthError
-from dsync.network.index_diff import Role as DiffRole, diff_indexes
+from dsync.network.errors import FrameValidationError, PeerAuthError
+from dsync.network.file_transfer import apply_renames
+from dsync.network.index_diff import (
+    Role as DiffRole,
+    diff_indexes,
+    renames_from_yaml,
+    renames_to_yaml,
+)
 from dsync.network.index_exchange import FolderIndex, IndexExchange
 from dsync.network.peer_auth import (
     extract_spki,
@@ -38,7 +46,9 @@ from dsync.network.quic_core import (
     MsgType,
     async_recv_auth_msg,
     async_recv_msg,
+    async_recv_rename,
     async_send_msg,
+    async_send_rename,
     get_quic_channel_binding,
 )
 
@@ -205,10 +215,16 @@ class PeerSession:
             peer_index = await IndexExchange(local_index).exchange(writer, reader, is_source=True)
             diff = diff_indexes(local_index, peer_index, DiffRole.SOURCE)
             logger.info(
-                "diff: %d to upload, %d unchanged (skipped)",
+                "diff: %d to upload, %d to rename, %d unchanged (skipped)",
                 len(diff.to_upload),
+                len(diff.renamed),
                 len(diff.unchanged),
             )
+
+            # Always send RENAME frame (even if empty) so receiver stays in lockstep.
+            await async_send_rename(writer, renames_to_yaml(diff.renamed))
+            if diff.renamed:
+                print(f"[+] sent {len(diff.renamed)} rename command(s)")
 
             if not diff.to_upload:
                 print(f"[+] '{self._folder.id}' already up to date, nothing to transfer")
@@ -250,10 +266,21 @@ class PeerSession:
             peer_index = await IndexExchange(local_index).exchange(writer, reader, is_source=False)
             diff = diff_indexes(local_index, peer_index, DiffRole.RECEIVER)
             logger.info(
-                "diff: %d to download, %d unchanged (skipped)",
+                "diff: %d to download, %d to rename, %d unchanged (skipped)",
                 len(diff.to_download),
+                len(diff.renamed),
                 len(diff.unchanged),
             )
+
+            # Receive and apply rename commands before any payload arrives.
+            rename_payload = await async_recv_rename(reader)
+            try:
+                renames = renames_from_yaml(rename_payload)
+            except (KeyError, TypeError, yaml.YAMLError) as e:
+                raise FrameValidationError(f"Failed to parse peer rename commands: {e}") from e
+            if renames:
+                applied = await apply_renames(renames, dest_root)
+                print(f"[+] applied {applied} rename(s) in {dest_root}")
 
             if not diff.to_download:
                 print(f"[+] '{folder_id}' already up to date, nothing to receive")
