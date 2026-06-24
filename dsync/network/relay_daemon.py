@@ -374,19 +374,22 @@ class RelayDaemon:
         writer: asyncio.StreamWriter,
     ) -> None:
         try:
-            msg_type, body = await recv_json(reader)
-        except Exception as exc:
-            logger.warning("relay-pushed stream malformed: %s", exc)
-            return
+            try:
+                msg_type, body = await recv_json(reader)
+            except Exception as exc:
+                logger.warning("relay-pushed stream malformed: %s", exc)
+                return
 
-        if msg_type == MsgType.PUNCH_INFO:
-            punch = parse_punch_info(body)
-            await self._handle_incoming_punch_info(punch)
-        elif msg_type == MsgType.CONTROL_PING:
-            with contextlib.suppress(Exception):
-                await send_json(writer, MsgType.CONTROL_PING, None)
-        else:
-            logger.warning("ignoring relay-pushed msg type %s", msg_type)
+            if msg_type == MsgType.PUNCH_INFO:
+                punch = parse_punch_info(body)
+                await self._handle_incoming_punch_info(punch)
+            elif msg_type == MsgType.CONTROL_PING:
+                with contextlib.suppress(Exception):
+                    await send_json(writer, MsgType.CONTROL_PING, None)
+            else:
+                logger.warning("ignoring relay-pushed msg type %s", msg_type)
+        finally:
+            writer.close()
 
     async def _handle_incoming_punch_info(self, punch: PunchInfo) -> None:
         """We're the listener for an inbound sync from ``punch.peer_*``.
@@ -445,45 +448,50 @@ class RelayDaemon:
         self,
         accepted: QuicConnectionProtocol,
     ) -> None:
+        assert self._endpoint is not None
         try:
-            await asyncio.wait_for(accepted.wait_connected(), timeout=15.0)
-        except TimeoutError:
-            logger.warning("inbound peer never completed handshake; dropping")
-            return
+            try:
+                await asyncio.wait_for(accepted.wait_connected(), timeout=15.0)
+            except TimeoutError:
+                logger.warning("inbound peer never completed handshake; dropping")
+                return
 
-        # Identify the peer via _pending_dials populated by PUNCH_INFO.
-        peer_addr = accepted._quic._network_paths[0].addr
-        pending = self._pending_dials.pop(peer_addr, None)
-        if pending is None:
-            logger.warning(
-                "inbound peer at %s without matching PUNCH_INFO; dropping",
-                peer_addr,
+            # Identify the peer via _pending_dials populated by PUNCH_INFO.
+            peer_addr = accepted._quic._network_paths[0].addr
+            pending = self._pending_dials.pop(peer_addr, None)
+            if pending is None:
+                logger.warning(
+                    "inbound peer at %s without matching PUNCH_INFO; dropping",
+                    peer_addr,
+                )
+                return
+
+            # Wait for the peer's first stream (their AUTH frame).
+            stream_pair = await _wait_for_first_stream(accepted, timeout=15.0)
+            if stream_pair is None:
+                logger.warning("inbound peer opened no stream; dropping")
+                return
+            reader, writer = stream_pair
+
+            session = PeerSession.as_peer(
+                cert_path=self._cert_path,
+                key_path=self._key_path,
+                state=self._state,
+                recv_dir=self._recv_dir,
             )
-            return
-
-        # Wait for the peer's first stream (their AUTH frame).
-        stream_pair = await _wait_for_first_stream(accepted, timeout=15.0)
-        if stream_pair is None:
-            logger.warning("inbound peer opened no stream; dropping")
-            return
-        reader, writer = stream_pair
-
-        session = PeerSession.as_peer(
-            cert_path=self._cert_path,
-            key_path=self._key_path,
-            state=self._state,
-            recv_dir=self._recv_dir,
-        )
-        try:
-            await session.run(
-                reader,
-                writer,
-                accepted._quic,
-                expected_peer_fingerprint=pending.peer_fingerprint,
-            )
-            logger.info("inbound sync from %s complete", pending.peer_id)
-        except Exception:
-            logger.exception("inbound sync from %s failed", pending.peer_id)
+            try:
+                await session.run(
+                    reader,
+                    writer,
+                    accepted._quic,
+                    expected_peer_fingerprint=pending.peer_fingerprint,
+                )
+                logger.info("inbound sync from %s complete", pending.peer_id)
+            except Exception:
+                logger.exception("inbound sync from %s failed", pending.peer_id)
+        finally:
+            self._endpoint.remove_connection_by_protocol(accepted)
+            accepted.close()
 
     # ---- IPC ----------------------------------------------------------------
 

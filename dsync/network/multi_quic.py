@@ -98,7 +98,11 @@ class MultiQuicEndpoint(asyncio.DatagramProtocol):
             proto = self._maybe_accept(data, addr)
         if proto is None:
             return  # unknown peer, server mode off → drop
-        proto.datagram_received(data, addr)
+        try:
+            proto.datagram_received(data, addr)
+        except Exception:
+            logger.exception("child protocol datagram_received raised for %s; evicting", addr)
+            self._protocols_by_addr.pop(addr, None)
 
     # ---- public API ----------------------------------------------------------
 
@@ -208,13 +212,23 @@ class MultiQuicEndpoint(asyncio.DatagramProtocol):
         protocol.connection_made(self._transport)
         self._protocols_by_addr[peer_addr] = protocol
 
-        quic_conn.connect(peer_addr, now=asyncio.get_running_loop().time())
-        protocol.transmit()
+        try:
+            quic_conn.connect(peer_addr, now=asyncio.get_running_loop().time())
+            protocol.transmit()
+        except Exception:
+            self._protocols_by_addr.pop(peer_addr, None)
+            raise
         return protocol
 
     def remove_connection(self, peer_addr: tuple[str, int]) -> None:
         """Drop ``peer_addr`` from the routing table (does not close the protocol)."""
         self._protocols_by_addr.pop(peer_addr, None)
+
+    def remove_connection_by_protocol(self, protocol: QuicConnectionProtocol) -> None:
+        """Drop the routing entry whose value is ``protocol`` (does not close it)."""
+        addr = next((a for a, p in self._protocols_by_addr.items() if p is protocol), None)
+        if addr is not None:
+            self._protocols_by_addr.pop(addr)
 
     def send_datagram(self, data: bytes, peer_addr: tuple[str, int]) -> None:
         """Send a raw UDP datagram from the multiplexed socket to ``peer_addr``.
